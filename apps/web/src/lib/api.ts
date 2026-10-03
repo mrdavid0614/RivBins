@@ -13,7 +13,8 @@ export class ApiError extends Error {
 /** Typed fetch against the NestJS API. Never cached: scores change on every recompute. */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (init?.body !== undefined && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+  // Default to JSON only for string bodies (JSON.stringify); fetch sets the right type for the rest.
+  if (typeof init?.body === 'string' && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
