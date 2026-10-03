@@ -109,8 +109,13 @@ commits transcript 05 there (after **Transcript safety**), and marks the Release
   connection strings with credentials, private keys) **without printing them**:
   - Scan with commands that output only line numbers and the pattern type, never the
     matched text, e.g. `grep -nE 'postgres(ql)?://[^:]+:[^@]+@' file | cut -d: -f1`.
-  - Redact with an in-place `sed -E` whose pattern describes the *shape* of the secret,
-    never its literal value, e.g. `s#(postgres(ql)?://[^:]+:)[^@]+@#\1****@#g`.
+  - Redact with an in-place `sed` whose pattern describes the *shape* of the secret,
+    never its literal value. On macOS use exactly this form (`-i ''` = no backup file):
+    `sed -E -i '' 's#(postgres(ql)?://[^:]+:)[^@]+@#\1****@#g' file`.
+  - Afterwards, count the hits that are still unmasked (prints only a number), e.g.
+    `grep -E 'postgres(ql)?://[^:]+:[^@]+@' file | grep -vc ':\*\*\*\*@'` must print `0`.
+    Then check with `git status --short docs/transcripts/` that only the expected
+    transcript is there (no backup copies).
   - Never open hit lines with Read or Edit.
   - Redact only with the user's approval. If in doubt, don't commit it: move it out of the
     repo (e.g. `~/RivBins-transcripts/`).

@@ -239,7 +239,8 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
-- **Status:** Amended by D-031 (transcript commit timing, last transcript on `release/1.0.0`).
+- **Status:** Amended by D-031, D-033, D-034, D-035, D-036 (commit timing, release
+  transcript, declined transcripts, secret scan and redaction).
 - **Date:** 2026-10-03
 - **Area:** Process
 - **Decision:**
@@ -317,3 +318,13 @@ All decisions made during development, in chronological order.
     with in-place `sed` shape patterns, and never open hit lines with Read or Edit.
   - Correct the Roadmap intro: transcripts exist for feature rows 00–05 only, transcript
     05 goes on `release/1.0.0`, and the Release row has none.
+
+## D-036 — Portable redaction command and complete amendment marks
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the seventh `/code-review` of the transcript
+  workflow:
+  - Use the macOS-safe form `sed -E -i '' '…' file` (no backup file), verify with a
+    count of unmasked hits that must be `0`, and check `git status` for stray backups.
+    Tested on a temporary file with a fake secret.
+  - Mark D-029 as amended by every later decision that changed it.
