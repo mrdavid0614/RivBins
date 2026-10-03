@@ -66,6 +66,8 @@ Use the part of the codebase that changed. Omit the scope when a change spans th
 
 ## Pull requests
 
+- **Remote:** `origin` = `git@github.com:mrdavid0614/RivBins.git`. PRs are opened on
+  GitHub with the `gh` CLI.
 - **Title:** follows the Conventional Commits format, e.g.
   `feat(heatmap): add bin detail drawer`.
 - **Target:** `feature/*` → `develop`; `release/*` and `hotfix/*` → `main` (then back-merge
@@ -73,3 +75,20 @@ Use the part of the codebase that changed. Omit the scope when a change spans th
 - **Description:** a summary of what changed and why, how to test it, and links to any
   related decision in `DECISIONS.md` (e.g. `D-013`).
 - Keep PRs focused on one feature or fix.
+
+## Mandatory review step
+
+**Every PR must pass a review with the `/code-review` skill before it is merged.**
+
+1. Run `/code-review` against the PR (or the branch diff against its target branch).
+   Use level `medium` unless the user asks for another one. Never launch `ultra`; only the
+   user can trigger it.
+2. Report the findings to the user.
+3. **Do not change any code yet.** For each finding that needs a change, show the
+   proposed fix (a diff or the exact code change) and explain why.
+4. Wait for the user to approve, adjust, or reject each fix. Never use `/code-review --fix`,
+   since it applies changes without that approval step.
+5. Apply only the approved fixes, commit them with Conventional Commits, and run
+   `/code-review` again.
+6. The PR can be merged only when the review has no findings left, or the user has
+   explicitly accepted the remaining ones.
