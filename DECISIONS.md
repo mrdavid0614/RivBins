@@ -239,7 +239,7 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
-- **Status:** Amended by D-030 to D-037 (roadmap timing, commit timing, release
+- **Status:** Amended by D-030 to D-038 (roadmap timing, commit timing, release
   transcript, declined transcripts, secret scanning and redaction).
 - **Date:** 2026-10-03
 - **Area:** Process
@@ -344,3 +344,18 @@ All decisions made during development, in chronological order.
   with a fake GitHub token, a private key, and a URL with an `@` in the password: all
   three were found, and no value appeared in the output.
 - **Alternatives considered:** Extending the `grep`/`sed` patterns per secret type.
+
+## D-038 — Tighter `url-with-credentials` rule
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Tooling
+- **Decision:** Apply both findings from the ninth `/code-review`:
+  - The username is optional, so `redis://:<password>@host` is detected.
+  - The password stops at `/` (it can still contain `@`), so text like
+    `http://localhost:3000/docs ... "@nestjs/core"` is no longer flagged.
+  - Allowlist the local docker-compose URL (`rivbins:rivbins@localhost`), already public
+    in `apps/api/.env.example`.
+- **Rationale:** Tested 8 cases with gitleaks 8.30.1. A token, a private key, a password
+  containing `@`, and a URL with no username were detected; the npm-scope URLs, the
+  health URL, and the dev URL were not. No values appeared in the output.
+- **Known limit:** a password with a literal `/` (normally URL-encoded as `%2F`) is not
+  detected.
