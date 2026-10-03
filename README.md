@@ -24,9 +24,10 @@ pnpm install
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 
-# 3. Start PostgreSQL and apply the migrations
+# 3. Start PostgreSQL, apply the migrations, and load the demo data
 pnpm db:up
 pnpm db:migrate
+pnpm db:seed
 
 # 4. Run the API and the web app
 pnpm dev
@@ -51,15 +52,33 @@ pnpm dev
 | `pnpm db:up`      | Starts PostgreSQL in Docker                             |
 | `pnpm db:down`    | Stops PostgreSQL                                        |
 | `pnpm db:migrate` | Applies Prisma migrations (and creates new ones in development) |
+| `pnpm db:seed`    | **Wipes the database** and loads the demo data (see below) |
 
 API end-to-end tests need the database: `pnpm --filter @rivbins/api test:e2e`.
+
+## Seed data
+
+`pnpm db:seed` empties every table and loads a demo warehouse. It can be rerun at any time.
+
+- **Layout:** one warehouse, 3 aisles (A–C) × 2 racks × 2 levels × 3 positions = **36 bins**,
+  coded `A-01-01` to `C-02-06`.
+- **Inventory:** 20 products on multi-product pallets.
+- **History:** the **last 30 days** of activity (putaways, picks, moves, and manual
+  adjustments), simulated day by day so quantities and pallet locations always add up.
+  Each bin has a risk profile (quiet, medium, or busy), so activity is deliberately uneven.
+- **Past audits:** some bins were counted recently and passed, some passed a while ago,
+  and some busy bins failed twice. Failed counts corrected inventory with audit-generated
+  adjustments. The remaining bins have never been audited.
+
+The data is deterministic: dates are relative to the moment you seed, and the same random
+seed (`DEFAULT_SEED` in `apps/api/prisma/seed/generate.ts`) always produces the same data.
 
 ## Project structure
 
 ```
 apps/
   api/         NestJS API — the only app that touches the database
-    prisma/    schema.prisma, migrations
+    prisma/    schema.prisma, migrations, seed
   web/         Next.js app (App Router, Tailwind CSS)
 packages/
   shared/      API contract types shared by both apps
