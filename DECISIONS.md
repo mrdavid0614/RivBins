@@ -449,3 +449,11 @@ All decisions made during development, in chronological order.
 - **Alternatives considered:** A subagent or a blind `sed` command redacting the lines
   (rejected: D-037 says Claude never edits flagged lines); moving the transcript out of
   the repo.
+
+## D-048 — Review fix: generate the Prisma client before seeding
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Seed
+- **Decision:** Apply the `/code-review` finding on `feature/seed-data`: `db:seed` runs
+  `pnpm db:generate` first, like the other scripts that need the client, so the README's
+  fresh-clone order (install → migrate → seed) works. Verified by deleting the generated
+  client and running `pnpm db:seed`.

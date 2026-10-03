@@ -20,7 +20,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "db:seed": "prisma db seed",
+    "db:seed": "pnpm db:generate && prisma db seed",
     "db:studio": "prisma studio"
   },
   "dependencies": {
