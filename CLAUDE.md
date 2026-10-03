@@ -145,8 +145,8 @@ the Release row (R) has no transcript.
 | #  | Feature                                             | Transcript         | Status   |
 |----|-----------------------------------------------------|--------------------|----------|
 | 00 | Project setup: business logic, decisions, scaffold  | `00-project-setup` | Done     |
-| 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Next     |
-| 02 | Scoring service + recompute                         | `02-scoring`       | Planned  |
+| 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Done     |
+| 02 | Scoring service + recompute                         | `02-scoring`       | Next     |
 | 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Planned  |
 | 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
 | 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
@@ -189,7 +189,8 @@ RivBins/
 ### Physical hierarchy
 Warehouse → Aisle → Rack → Bin
 
-- The seed has one warehouse with a few aisles and racks and **~30 bins** in total.
+- The seed has one warehouse with 3 aisles, 2 racks per aisle, and **36 bins** in total
+  (2 levels × 3 positions per rack, D-043).
 - Each bin has a unique, human-readable **bin code** (used for search/scan), e.g. `A-01-03`.
 - The heatmap uses this hierarchy for its layout: a grid per aisle and rack.
 

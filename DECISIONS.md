@@ -396,3 +396,56 @@ All decisions made during development, in chronological order.
     agents) never returns transcript lines. The "never print transcripts" rule now also
     covers Read and search tools.
   - Mark D-037 as amended by D-038, D-040, and D-041.
+
+## D-042 — Feature 01 plan: deterministic seed data
+- **Date:** 2026-10-03
+- **Area:** Seed / Process
+- **Decision:** Approve the plan for feature 01 (`feature/seed-data`):
+  - A pure, deterministic generator (`generateSeedData(now, seed)`, mulberry32 PRNG)
+    simulates the last 30 days forward in time, so movements, pallet locations, and
+    quantities are consistent by construction. A thin runner persists the rows.
+  - Bins get a risk profile (`cold` / `warm` / `hot`) that drives uneven activity.
+  - The seed doesn't compute scores: `SEED` scores are added in feature 02, once the
+    calculator exists. It creates no audit plans or tasks.
+  - Run with `tsx` (Node's type stripping doesn't rewrite the generated client's `.js`
+    imports), wired as Prisma's seed command and as `pnpm db:seed`.
+- **Alternatives considered:** Generating a final state and its movements separately.
+
+## D-043 — 36-bin warehouse layout
+- **Date:** 2026-10-03
+- **Area:** Seed / Domain model
+- **Decision:** The seed creates 36 bins: 3 aisles (A–C) × 2 racks × 2 levels ×
+  3 positions, coded `A-01-01` to `C-02-06`.
+- **Alternatives considered:** 30 bins with 5-position racks on a single level.
+
+## D-044 — The seed includes past audits
+- **Date:** 2026-10-03
+- **Area:** Seed / Scoring
+- **Decision:** Some bins get ad-hoc past audits (PASS and FAIL, `finalOutcome =
+  autoOutcome`, audit-generated adjustments on FAIL per D-004), so factors 1, 4, and 5
+  vary and some bins score green.
+- **Rationale:** Without audits every bin gets ≥25 points from factor 1 and 0 from
+  factors 4 and 5.
+
+## D-045 — No seed e2e test
+- **Date:** 2026-10-03
+- **Area:** Testing
+- **Decision:** The seed is covered by unit tests on the pure generator plus a manual
+  `pnpm db:seed` run. No e2e test, because it would wipe the local database.
+
+## D-046 — The seed wipes existing data
+- **Date:** 2026-10-03
+- **Area:** Seed
+- **Decision:** The seed truncates all tables (`RESTART IDENTITY CASCADE`) before
+  inserting, so it can be rerun without `prisma migrate reset`.
+
+## D-047 — The user redacts transcript findings manually
+- **Date:** 2026-10-03
+- **Area:** Process / Transcript safety
+- **Decision:** For the `00-project-setup` transcript, the user redacts the remaining
+  `url-with-credentials` findings in their editor, as D-037 requires. A redacted URL
+  keeps no `user:password` part (`scheme://[REDACTED]@host`), because
+  `user:[REDACTED]@host` still matches the rule.
+- **Alternatives considered:** A subagent or a blind `sed` command redacting the lines
+  (rejected: D-037 says Claude never edits flagged lines); moving the transcript out of
+  the repo.
