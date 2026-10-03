@@ -260,3 +260,14 @@ All decisions made during development, in chronological order.
 - **Decision:** A feature's branch updates the Roadmap (feature `Done`, next one `Next`)
   before its PR is reviewed and merged, instead of after the export. Fixes a `/code-review`
   finding: after the merge, the update would need a direct commit to `develop`.
+
+## D-031 — Transcript commit timing, final transcript, and commit scope
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the three findings from the second `/code-review` of the transcript
+  workflow:
+  - The previous transcript is committed right after the next feature's plan is approved
+    and its branch is created, never on `develop`.
+  - The last feature's transcript goes on `release/1.0.0`, which merges into `main`
+    (tagged `v1.0.0`) and back into `develop`. The release session is not exported.
+  - `transcripts` is added to the allowed Conventional Commit scopes.

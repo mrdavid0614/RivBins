@@ -70,7 +70,8 @@ automatically. At the start of a session:
 
 1. Read `DECISIONS.md` and the **Roadmap** below to see what's done and what's next.
 2. If `docs/transcripts/` has an uncommitted transcript from the previous feature, commit
-   it as the first commit of the next feature branch:
+   it as the first commit of the next feature branch, **right after the plan is approved
+   and the branch is created** (never on `develop`):
    `docs(transcripts): add <NN-name> session transcript`.
 
 ### Session transcripts (`/export` + `/clear`)
@@ -90,6 +91,11 @@ commands that **only the user can run**, so:
 3. After the user confirms, give the exact command:
    `/export docs/transcripts/<NN-name>.txt` (names from the Roadmap, e.g. `01-schema-seed`).
 4. The user runs `/export`, then `/clear`, and starts the next feature in the new session.
+
+Exception, the last feature: its transcript goes on the `release/1.0.0` branch (created
+from `develop` after the last feature merges). That branch merges into `main`, gets
+tagged `v1.0.0`, and is merged back into `develop`. The release session itself is not
+exported.
 
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full

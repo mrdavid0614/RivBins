@@ -58,7 +58,7 @@ Format:
 Use the part of the codebase that changed. Omit the scope when a change spans the repo.
 
 `api`, `web`, `shared`, `db` (Prisma schema/migrations), `seed`, `scoring`, `audits`,
-`audit-plans`, `heatmap`, `count`, `repo`
+`audit-plans`, `heatmap`, `count`, `repo`, `transcripts`
 
 ### Granularity
 - One logical change per commit. Don't mix unrelated changes.
