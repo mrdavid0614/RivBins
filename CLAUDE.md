@@ -105,7 +105,9 @@ commits transcript 05 there (after **Transcript safety**), and marks the Release
   `post…://riv…:****@…`"). Repeating it would put it into the next transcript.
 - **Never print a committed transcript's contents.** The only command that reads them is
   the gitleaks scan. Any `git diff`, `git show` or `git log -p` on a branch with
-  transcripts must exclude them: `-- . ':(exclude)docs/transcripts'`.
+  transcripts must exclude them: `-- . ':(exclude)docs/transcripts'`. Never open them with
+  Read, and never search them: the root `.ignore` file keeps `docs/transcripts/` out of
+  ripgrep-based search (Grep, Explore agents).
 - **Before `/export`:** in the preview, flag sensitive content the same way (location and
   type only).
 - **Before committing a transcript:** scan it with gitleaks (default rules plus

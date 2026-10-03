@@ -239,7 +239,7 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
-- **Status:** Amended by D-030 to D-040 (roadmap timing, commit timing, release
+- **Status:** Amended by D-030 to D-041 (roadmap timing, commit timing, release
   transcript, declined transcripts, secret scanning and redaction).
 - **Date:** 2026-10-03
 - **Area:** Process
@@ -333,6 +333,7 @@ All decisions made during development, in chronological order.
   - Mark D-029 as amended by every later decision that changed it.
 
 ## D-037 — Scan transcripts with gitleaks; the user redacts
+- **Status:** Amended by D-038, D-040, and D-041.
 - **Date:** 2026-10-03
 - **Area:** Process / Code review / Tooling
 - **Decision:** Replace the hand-written `grep`/`sed` secret rules with **gitleaks**
@@ -385,3 +386,13 @@ All decisions made during development, in chronological order.
     `develop`.
   - The user asked to apply everything required to merge `feature/session-transcripts`
     after this round.
+
+## D-041 — Keep transcripts out of search tools
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the findings from the final `/code-review` before merging
+  `feature/session-transcripts` (the user pre-authorized the fixes needed to merge):
+  - Add a root `.ignore` with `docs/transcripts/`, so ripgrep-based search (Grep, Explore
+    agents) never returns transcript lines. The "never print transcripts" rule now also
+    covers Read and search tools.
+  - Mark D-037 as amended by D-038, D-040, and D-041.
