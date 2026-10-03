@@ -48,6 +48,22 @@ architecture, the tooling, or the process.
   new entry and mark the old one `Superseded by D-XXX`.
 - If the decision changes business rules, update `CLAUDE.md` as well.
 
+### Plan before writing features
+**Always propose a plan before writing a feature, and wait for the user's approval before
+writing any code.** The plan covers:
+
+- **Scope:** what the feature does and what it explicitly leaves out.
+- **Changes:** files/modules to add or modify, data model or migration changes, and API
+  endpoints (method, path, request/response shape).
+- **Business rules:** which rules from this file apply and how they are implemented.
+- **Tests:** what gets unit-tested and what gets e2e-tested.
+- **Branch and commits:** the `feature/*` branch name and the planned commits.
+- **Open questions:** anything that needs a decision first.
+
+If the plan changes significantly during implementation, stop and propose the updated
+plan before continuing. Approved plans and the decisions in them are recorded in
+`DECISIONS.md`.
+
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
 rules are in `.claude/rules/git-workflow.md`.

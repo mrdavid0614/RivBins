@@ -229,3 +229,11 @@ All decisions made during development, in chronological order.
     `prisma generate` (and therefore build, typecheck, and unit tests) works without a
     `.env` file, e.g. in CI.
   - `apiFetch` defaults `Content-Type: application/json` only for string bodies.
+
+## D-028 — Plan before writing features
+- **Date:** 2026-10-03
+- **Area:** Process
+- **Decision:** Before writing any feature, propose a plan (scope, changes, business
+  rules, tests, branch/commits, open questions) and wait for approval before writing
+  code. Significant changes to an approved plan are proposed again before continuing.
+  Documented in `CLAUDE.md` under Working Agreements.
