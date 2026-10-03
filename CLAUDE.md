@@ -130,12 +130,18 @@ across bins so the scores spread across green, yellow, and red.
   bins that **do not already have a `PENDING` task**.
 - **AuditTask:** one per bin in a plan. Status is `PENDING` or `DONE`.
   Existing `PENDING` tasks are never modified when a new plan is created.
+  The database enforces **at most one `PENDING` task per bin** (partial unique index
+  `AuditTask_binId_pending_key`, raw SQL in the init migration). The plan service must
+  treat a violation as "bin already has a pending task" and skip it.
 - **AuditResult:** the outcome of counting one bin.
   - Per pallet line: expected qty, counted qty, difference.
   - Bin-level: auto-computed pass/fail (`autoOutcome`), the user's final pass/fail
     (`finalOutcome`, which may be an override), discrepancy ratio, and a timestamp.
   - Linked to its task when there is one. Ad-hoc counts (bin searched without a task)
     are allowed.
+- **Audit results cannot be deleted** while adjustments or score history reference them
+  (`ON DELETE RESTRICT`). Otherwise audit-generated adjustments would silently become
+  "manual" (null `auditResultId`) and inflate factor 3.
 - **BinScore:** an **append-only score history**. Every recompute inserts a new row and
   points `Bin.currentScoreId` at it, in one transaction. Rows are never updated.
 

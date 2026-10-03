@@ -209,3 +209,14 @@ All decisions made during development, in chronological order.
   generate the Prisma client before API typecheck/tests, remove the `db:seed` placeholder
   until the seed exists, build request headers with `Headers` (JSON content type only for
   non-FormData bodies), and treat empty API responses as `undefined`.
+
+## D-026 — Second review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Data model
+- **Decision:** Apply all four findings from the second `/code-review`:
+  - Rename the API lint config to `.oxlintrc.json` so oxlint actually loads it.
+  - Run oxlint with `--type-aware` (`oxlint-tsgolint`) so `no-floating-promises` works.
+  - `onDelete: Restrict` on `Movement.auditResultId` and `BinScore.auditResultId`.
+  - Partial unique index: at most one `PENDING` task per bin.
+  - Regenerate the `init` migration instead of adding follow-up migrations (the user
+    explicitly consented to resetting the local database).
