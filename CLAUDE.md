@@ -64,6 +64,68 @@ If the plan changes significantly during implementation, stop and propose the up
 plan before continuing. Approved plans and the decisions in them are recorded in
 `DECISIONS.md`.
 
+### Start of every session
+Sessions are cleared between features, so this file is the only context that loads
+automatically. At the start of a session:
+
+1. Read `DECISIONS.md` and the **Roadmap** below to see what's done and what's next.
+   If the `Next` row is the **Release**, don't plan a feature: follow the last-feature
+   exception in "Session transcripts".
+2. If `docs/transcripts/` has an uncommitted transcript from the previous feature, commit
+   it as the first commit of the next feature branch, **right after the plan is approved
+   and the branch is created** (never on `develop`):
+   `docs(transcripts): add <NN-name> session transcript`.
+   Before committing, follow **Transcript safety**.
+
+### Session transcripts (`/export` + `/clear`)
+**Before a feature's PR is reviewed**, its branch must include the Roadmap update: mark
+the feature `Done` and the following one `Next`. That way `develop` is correct as soon as
+the PR is merged.
+
+After every feature is **ready** (its PR passed `/code-review` and is merged into
+`develop`), close the session with a transcript. `/export` and `/clear` are Claude Code
+commands that **only the user can run**, so:
+
+1. **Show a preview** of what the session covered: the feature, the decisions made
+   (`D-XXX`), the PRs and commits, and the review findings. Flag sensitive content
+   following **Transcript safety**.
+2. **Ask for confirmation** before the export.
+3. After the user confirms, give the exact command:
+   `/export docs/transcripts/<NN-name>.txt` (names from the Roadmap, e.g. `01-schema-seed`).
+4. The user runs `/export`, then `/clear`, and starts the next feature in the new session.
+
+Exception, the last feature: the release session creates `release/1.0.0` from `develop`,
+commits transcript 05 there (after **Transcript safety**), and marks the Release row
+`Done`. That branch merges into `main`, gets tagged `v1.0.0`, and is merged back into
+`develop`. The release session itself is not exported.
+
+### Transcript safety (applies to every transcript, including the release)
+- **Never repeat a secret in the conversation.** When reporting a sensitive hit, give only
+  its location and type, with a masked value (e.g. "line 812: Postgres URL with password
+  `post…://riv…:****@…`"). Repeating it would put it into the next transcript.
+- **Never print a committed transcript's contents.** The only command that reads them is
+  the gitleaks scan. Any `git diff`, `git show` or `git log -p` on a branch with
+  transcripts must exclude them: `-- . ':(exclude)docs/transcripts'`. Never open them with
+  Read, and never search them: the root `.ignore` file keeps `docs/transcripts/` out of
+  ripgrep-based search (Grep, Explore agents).
+- **Before `/export`:** in the preview, flag sensitive content the same way (location and
+  type only).
+- **Before committing a transcript:** scan it with gitleaks (default rules plus
+  `url-with-credentials` from `.gitleaks.toml`). Never use `-v`: it prints the text around
+  each finding. Write the report to a temp file and print only line numbers and rule IDs:
+
+  ```bash
+  r=$(mktemp) && gitleaks dir --config .gitleaks.toml --redact --no-banner \
+    --report-format json --report-path "$r" docs/transcripts/<NN-name>.txt; echo "exit: $?"; \
+    python3 -c 'import json,sys; [print(f["StartLine"], f["RuleID"]) for f in json.load(open(sys.argv[1]))]' "$r"; rm -f "$r"
+  ```
+
+  - Report only the line number and rule ID of each finding.
+  - If there are findings, **the user redacts them in their editor**, outside the session.
+    Claude never opens or edits the lines with findings.
+  - Re-run the scan; it must exit `0` (no findings) before the commit. If in doubt, don't
+    commit it: move it out of the repo (e.g. `~/RivBins-transcripts/`).
+
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
 rules are in `.claude/rules/git-workflow.md`.
@@ -72,6 +134,23 @@ rules are in `.claude/rules/git-workflow.md`.
 **Every PR must pass a `/code-review` before merging.** When a finding needs a change,
 show the proposed fix to the user and wait for approval before applying it. The full
 process is in `.claude/rules/git-workflow.md`.
+
+## Roadmap
+
+One feature per session, and one transcript per feature row (00–05) in
+`docs/transcripts/`. Each feature normally has one `feature/*` branch and one PR.
+Exceptions: row 00 (setup) spans several PRs, transcript 05 goes on `release/1.0.0`, and
+the Release row (R) has no transcript.
+
+| #  | Feature                                             | Transcript         | Status   |
+|----|-----------------------------------------------------|--------------------|----------|
+| 00 | Project setup: business logic, decisions, scaffold  | `00-project-setup` | Done     |
+| 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Next     |
+| 02 | Scoring service + recompute                         | `02-scoring`       | Planned  |
+| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Planned  |
+| 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
+| 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
+| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Planned |
 
 ## Project Structure
 

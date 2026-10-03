@@ -237,3 +237,162 @@ All decisions made during development, in chronological order.
   rules, tests, branch/commits, open questions) and wait for approval before writing
   code. Significant changes to an approved plan are proposed again before continuing.
   Documented in `CLAUDE.md` under Working Agreements.
+
+## D-029 — Session transcripts and roadmap
+- **Status:** Amended by D-030 to D-041 (roadmap timing, commit timing, release
+  transcript, declined transcripts, secret scanning and redaction).
+- **Date:** 2026-10-03
+- **Area:** Process
+- **Decision:**
+  - After every feature is ready (PR reviewed and merged into `develop`), the session is
+    exported with `/export` and cleared with `/clear`. Both are run by the user.
+  - Before the export, Claude shows a **preview** of what the session covered (no extra
+    summary file), flags anything sensitive, and asks for confirmation.
+  - Transcripts are saved in `docs/transcripts/` and committed with the next feature's
+    branch, named `NN-name` (`00-project-setup`, `01-schema-seed`, `02-scoring`, ...).
+  - This setup session is exported as `00-project-setup`.
+  - `CLAUDE.md` gets a Roadmap (feature, transcript name, status) and a start-of-session
+    checklist, since only `CLAUDE.md` loads automatically after `/clear`.
+- **Alternatives considered:** An approved summary file next to each export; keeping
+  transcripts outside the repo; folding this session into `01-schema-seed`.
+
+## D-030 — Roadmap update happens before the feature's review
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** A feature's branch updates the Roadmap (feature `Done`, next one `Next`)
+  before its PR is reviewed and merged, instead of after the export. Fixes a `/code-review`
+  finding: after the merge, the update would need a direct commit to `develop`.
+
+## D-031 — Transcript commit timing, final transcript, and commit scope
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the three findings from the second `/code-review` of the transcript
+  workflow:
+  - The previous transcript is committed right after the next feature's plan is approved
+    and its branch is created, never on `develop`.
+  - The last feature's transcript goes on `release/1.0.0`, which merges into `main`
+    (tagged `v1.0.0`) and back into `develop`. The release session is not exported.
+  - `transcripts` is added to the allowed Conventional Commit scopes.
+
+## D-032 — Secret scan before committing transcripts
+- **Status:** Amended by D-034 and D-037.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the three findings from the third `/code-review` of the transcript
+  workflow:
+  - Before a transcript is committed, scan it for secrets, show the findings, and redact
+    with the user's approval (or don't commit it).
+  - Mark D-029 as amended by D-031.
+  - Correct the Roadmap intro: row 00 spans several PRs, and the last transcript goes on
+    `release/1.0.0`.
+
+## D-033 — Declined transcripts and the release row
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the fourth `/code-review` of the transcript
+  workflow:
+  - A transcript that isn't committed (possible secrets) is moved out of the repo, e.g.
+    to `~/RivBins-transcripts/`.
+  - The Roadmap gets a Release row after feature 05, and the start-of-session checklist
+    says to follow the release exception when that row is `Next`.
+
+## D-034 — Single "Transcript safety" rule
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Replace the scattered secret-handling steps with one **Transcript safety**
+  rule in `CLAUDE.md` that both the feature path and the release path reference:
+  - Never repeat a secret in the conversation; report only location, type, and a masked
+    value.
+  - Flag sensitive content that way in the export preview.
+  - Scan, then redact with approval (or move out of the repo) before committing any
+    transcript, including transcript 05 on `release/1.0.0`.
+  - The release session marks the Release row `Done`.
+- **Rationale:** Fixes the fifth `/code-review` findings. Showing secrets while flagging
+  them would copy them into the next transcript.
+
+## D-035 — Scan and redact transcripts without printing secrets
+- **Status:** Superseded by D-037.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the sixth `/code-review` of the transcript
+  workflow:
+  - Scan transcripts with commands that print only line numbers and pattern types, redact
+    with in-place `sed` shape patterns, and never open hit lines with Read or Edit.
+  - Correct the Roadmap intro: transcripts exist for feature rows 00–05 only, transcript
+    05 goes on `release/1.0.0`, and the Release row has none.
+
+## D-036 — Portable redaction command and complete amendment marks
+- **Status:** Redaction part superseded by D-037.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the seventh `/code-review` of the transcript
+  workflow:
+  - Use the macOS-safe form `sed -E -i '' '…' file` (no backup file), verify with a
+    count of unmasked hits that must be `0`, and check `git status` for stray backups.
+    Tested on a temporary file with a fake secret.
+  - Mark D-029 as amended by every later decision that changed it.
+
+## D-037 — Scan transcripts with gitleaks; the user redacts
+- **Status:** Amended by D-038, D-040, and D-041.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Tooling
+- **Decision:** Replace the hand-written `grep`/`sed` secret rules with **gitleaks**
+  (installed with Homebrew, 8.30.1):
+  - Scan with `gitleaks dir --config .gitleaks.toml --redact`. `.gitleaks.toml` extends
+    the default rules with `url-with-credentials`, since the defaults miss connection
+    strings with passwords.
+  - Report only line numbers and rule IDs. The user redacts findings in their own editor,
+    outside the session, and the re-scan must exit `0` before the commit.
+- **Rationale:** Fixes the eighth `/code-review` findings. The hand-written patterns only
+  covered Postgres URLs and missed passwords containing `@`. Tested on a temporary file
+  with a fake GitHub token, a private key, and a URL with an `@` in the password: all
+  three were found, and no value appeared in the output.
+- **Alternatives considered:** Extending the `grep`/`sed` patterns per secret type.
+
+## D-038 — Tighter `url-with-credentials` rule
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Tooling
+- **Decision:** Apply both findings from the ninth `/code-review`:
+  - The username is optional, so `redis://:<password>@host` is detected.
+  - The password stops at `/` (it can still contain `@`), so text like
+    `http://localhost:3000/docs ... "@nestjs/core"` is no longer flagged.
+  - Allowlist the local docker-compose URL (`rivbins:rivbins@localhost`), already public
+    in `apps/api/.env.example`.
+- **Rationale:** Tested 8 cases with gitleaks 8.30.1. A token, a private key, a password
+  containing `@`, and a URL with no username were detected; the npm-scope URLs, the
+  health URL, and the dev URL were not. No values appeared in the output.
+- **Known limit:** a password with a literal `/` (normally URL-encoded as `%2F`) is not
+  detected.
+
+## D-039 — Transcripts never enter the conversation through git
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the tenth `/code-review`:
+  - Committed transcripts are never printed. Every `git diff`/`git show`/`git log -p` on a
+    branch with transcripts excludes `docs/transcripts/`, and `/code-review` always
+    excludes it too. Otherwise each review would copy the previous transcript into the
+    session, and transcripts would nest and repeat any missed secret.
+  - Mark D-032 as amended by D-034 and D-037, D-035 as superseded by D-037, and D-036's
+    redaction part as superseded by D-037.
+
+## D-040 — Non-verbose transcript scan, review diff against the PR target, merge
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the eleventh `/code-review`:
+  - Scan transcripts without `-v` (it prints the text around findings). Write a JSON
+    report to a temp file and print only line numbers and rule IDs. Tested: exit 1 with
+    findings, 0 when clean, and no surrounding text printed.
+  - The review diff uses the PR's target branch (`develop` or `main`), not always
+    `develop`.
+  - The user asked to apply everything required to merge `feature/session-transcripts`
+    after this round.
+
+## D-041 — Keep transcripts out of search tools
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the findings from the final `/code-review` before merging
+  `feature/session-transcripts` (the user pre-authorized the fixes needed to merge):
+  - Add a root `.ignore` with `docs/transcripts/`, so ripgrep-based search (Grep, Explore
+    agents) never returns transcript lines. The "never print transcripts" rule now also
+    covers Read and search tools.
+  - Mark D-037 as amended by D-038, D-040, and D-041.
