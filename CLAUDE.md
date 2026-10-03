@@ -44,6 +44,11 @@ architecture, the tooling, or the process.
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
 rules are in `.claude/rules/git-workflow.md`.
 
+### Code review
+**Every PR must pass a `/code-review` before merging.** When a finding needs a change,
+show the proposed fix to the user and wait for approval before applying it. The full
+process is in `.claude/rules/git-workflow.md`.
+
 ## Project Structure
 
 ```
