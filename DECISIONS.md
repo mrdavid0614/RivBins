@@ -220,3 +220,12 @@ All decisions made during development, in chronological order.
   - Partial unique index: at most one `PENDING` task per bin.
   - Regenerate the `init` migration instead of adding follow-up migrations (the user
     explicitly consented to resetting the local database).
+
+## D-027 — Third review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the third `/code-review`:
+  - `prisma.config.ts` only declares the datasource when `DATABASE_URL` is set, so
+    `prisma generate` (and therefore build, typecheck, and unit tests) works without a
+    `.env` file, e.g. in CI.
+  - `apiFetch` defaults `Content-Type: application/json` only for string bodies.
