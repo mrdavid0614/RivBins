@@ -15,8 +15,7 @@
     "test": "pnpm -r test",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
-    "db:migrate": "pnpm --filter @rivbins/api db:migrate",
-    "db:seed": "pnpm --filter @rivbins/api db:seed"
+    "db:migrate": "pnpm --filter @rivbins/api db:migrate"
   },
   "devDependencies": {
     "typescript": "~6.0.3"
