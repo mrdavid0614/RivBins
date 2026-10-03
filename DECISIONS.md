@@ -253,3 +253,10 @@ All decisions made during development, in chronological order.
     checklist, since only `CLAUDE.md` loads automatically after `/clear`.
 - **Alternatives considered:** An approved summary file next to each export; keeping
   transcripts outside the repo; folding this session into `01-schema-seed`.
+
+## D-030 — Roadmap update happens before the feature's review
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** A feature's branch updates the Roadmap (feature `Done`, next one `Next`)
+  before its PR is reviewed and merged, instead of after the export. Fixes a `/code-review`
+  finding: after the merge, the update would need a direct commit to `develop`.

@@ -74,6 +74,10 @@ automatically. At the start of a session:
    `docs(transcripts): add <NN-name> session transcript`.
 
 ### Session transcripts (`/export` + `/clear`)
+**Before a feature's PR is reviewed**, its branch must include the Roadmap update: mark
+the feature `Done` and the following one `Next`. That way `develop` is correct as soon as
+the PR is merged.
+
 After every feature is **ready** (its PR passed `/code-review` and is merged into
 `develop`), close the session with a transcript. `/export` and `/clear` are Claude Code
 commands that **only the user can run**, so:
@@ -86,7 +90,6 @@ commands that **only the user can run**, so:
 3. After the user confirms, give the exact command:
    `/export docs/transcripts/<NN-name>.txt` (names from the Roadmap, e.g. `01-schema-seed`).
 4. The user runs `/export`, then `/clear`, and starts the next feature in the new session.
-5. Update the Roadmap status in the feature's PR, before the export.
 
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
