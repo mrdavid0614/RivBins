@@ -241,13 +241,13 @@ ALTER TABLE "Movement" ADD CONSTRAINT "Movement_palletId_fkey" FOREIGN KEY ("pal
 ALTER TABLE "Movement" ADD CONSTRAINT "Movement_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Movement" ADD CONSTRAINT "Movement_auditResultId_fkey" FOREIGN KEY ("auditResultId") REFERENCES "AuditResult"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Movement" ADD CONSTRAINT "Movement_auditResultId_fkey" FOREIGN KEY ("auditResultId") REFERENCES "AuditResult"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "BinScore" ADD CONSTRAINT "BinScore_binId_fkey" FOREIGN KEY ("binId") REFERENCES "Bin"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BinScore" ADD CONSTRAINT "BinScore_auditResultId_fkey" FOREIGN KEY ("auditResultId") REFERENCES "AuditResult"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "BinScore" ADD CONSTRAINT "BinScore_auditResultId_fkey" FOREIGN KEY ("auditResultId") REFERENCES "AuditResult"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AuditTask" ADD CONSTRAINT "AuditTask_planId_fkey" FOREIGN KEY ("planId") REFERENCES "AuditPlan"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -269,3 +269,6 @@ ALTER TABLE "AuditResultLine" ADD CONSTRAINT "AuditResultLine_palletId_fkey" FOR
 
 -- AddForeignKey
 ALTER TABLE "AuditResultLine" ADD CONSTRAINT "AuditResultLine_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- At most one PENDING audit task per bin (not expressible in the Prisma schema).
+CREATE UNIQUE INDEX "AuditTask_binId_pending_key" ON "AuditTask"("binId") WHERE "status" = 'PENDING';

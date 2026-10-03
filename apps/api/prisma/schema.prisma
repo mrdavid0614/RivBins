@@ -141,7 +141,7 @@ model Movement {
   fromBin     Bin?         @relation("MovementFromBin", fields: [fromBinId], references: [id])
   pallet      Pallet       @relation(fields: [palletId], references: [id])
   product     Product?     @relation(fields: [productId], references: [id])
-  auditResult AuditResult? @relation(fields: [auditResultId], references: [id])
+  auditResult AuditResult? @relation(fields: [auditResultId], references: [id], onDelete: Restrict)
 
   @@index([binId, occurredAt])
   @@index([fromBinId, occurredAt])
@@ -162,7 +162,7 @@ model BinScore {
 
   bin         Bin          @relation("ScoreHistory", fields: [binId], references: [id])
   currentFor  Bin?         @relation("CurrentScore")
-  auditResult AuditResult? @relation(fields: [auditResultId], references: [id])
+  auditResult AuditResult? @relation(fields: [auditResultId], references: [id], onDelete: Restrict)
 
   @@index([binId, computedAt])
 }
@@ -190,6 +190,8 @@ model AuditTask {
   bin         Bin          @relation(fields: [binId], references: [id])
   auditResult AuditResult?
 
+  // At most one PENDING task per bin is enforced by a partial unique index
+  // ("AuditTask_binId_pending_key") added as raw SQL in the init migration.
   @@index([binId, status])
 }
 
