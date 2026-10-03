@@ -128,6 +128,7 @@ All decisions made during development, in chronological order.
 - **Alternatives considered:** A single current score per bin.
 
 ## D-015 — Tooling
+- **Status:** Testing part (Jest) superseded by D-022.
 - **Date:** 2026-10-02
 - **Area:** Tech stack
 - **Decision:** pnpm workspaces (pinned through `packageManager`, set up with
@@ -168,3 +169,63 @@ All decisions made during development, in chronological order.
 - **Area:** Process
 - **Decision:** The remote is `git@github.com:mrdavid0614/RivBins.git`. PRs are opened on
   GitHub. Rule changes also go through a `feature/*` branch and a reviewed PR.
+
+## D-021 — Node.js 24 LTS
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** The project requires Node.js 24 LTS (`.nvmrc` = `24.21.0`, engines
+  `>=24.15`).
+- **Rationale:** Nest CLI 12 requires Node `^22.22.3`, `^24.15.0`, or `>=26`. Node 24 is
+  the current LTS.
+- **Alternatives considered:** Latest Node 22 (maintenance LTS); staying on Node 22.12 and
+  dropping the Nest CLI.
+
+## D-022 — Vitest for API tests
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** Use Vitest instead of Jest for the API. Supersedes the testing part of
+  D-015.
+- **Rationale:** Nest 12 generates ESM projects with Vitest by default. Vitest supports
+  ESM and TypeScript natively, while Jest's ESM support is still experimental.
+- **Alternatives considered:** Jest with extra ESM configuration.
+
+## D-023 — oxlint for the API
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** Keep oxlint (Nest 12's default) for the API. The web app keeps ESLint with
+  `eslint-config-next`.
+- **Alternatives considered:** ESLint with typescript-eslint in both apps.
+
+## D-024 — PostgreSQL 17
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** Keep PostgreSQL 17 (`postgres:17-alpine`) in `docker-compose.yml`.
+- **Alternatives considered:** PostgreSQL 16 (already available locally).
+
+## D-025 — Review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply all four `/code-review` findings on `feature/monorepo-scaffold`:
+  generate the Prisma client before API typecheck/tests, remove the `db:seed` placeholder
+  until the seed exists, build request headers with `Headers` (JSON content type only for
+  non-FormData bodies), and treat empty API responses as `undefined`.
+
+## D-026 — Second review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Data model
+- **Decision:** Apply all four findings from the second `/code-review`:
+  - Rename the API lint config to `.oxlintrc.json` so oxlint actually loads it.
+  - Run oxlint with `--type-aware` (`oxlint-tsgolint`) so `no-floating-promises` works.
+  - `onDelete: Restrict` on `Movement.auditResultId` and `BinScore.auditResultId`.
+  - Partial unique index: at most one `PENDING` task per bin.
+  - Regenerate the `init` migration instead of adding follow-up migrations (the user
+    explicitly consented to resetting the local database).
+
+## D-027 — Third review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the third `/code-review`:
+  - `prisma.config.ts` only declares the datasource when `DATABASE_URL` is set, so
+    `prisma generate` (and therefore build, typecheck, and unit tests) works without a
+    `.env` file, e.g. in CI.
+  - `apiFetch` defaults `Content-Type: application/json` only for string bodies.

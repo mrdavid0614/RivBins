@@ -17,14 +17,22 @@ results feed back into the next scoring run.
   - Config files should be TypeScript when the tool supports it
     (e.g. `next.config.ts`, the Prisma seed script).
   - `strict: true` in every `tsconfig.json`; avoid `any`.
-- **Frontend:** Next.js
-- **Backend:** NestJS
-- **ORM:** Prisma
-- **Database:** PostgreSQL (run locally via `docker-compose.yml`)
-- **Package manager:** pnpm workspaces, pinned through the `packageManager` field in the
-  root `package.json` (setup: `corepack enable`). No Turborepo/Nx.
-- **Styling:** Tailwind CSS
-- **Testing:** Jest (API), with priority on unit tests for the scoring calculator
+- **Runtime:** Node.js 24 LTS (`.nvmrc` = `24.21.0`, engines `>=24.15`, required by Nest CLI 12)
+- **Frontend:** Next.js 16 (App Router), React 19
+- **Backend:** NestJS 12, as an **ESM** project (`"type": "module"`, relative imports end in `.js`)
+- **ORM:** Prisma 7 (`prisma-client` generator into `apps/api/src/generated/prisma`,
+  `@prisma/adapter-pg`, config in `apps/api/prisma.config.ts`)
+- **Database:** PostgreSQL 17 (run locally via `docker-compose.yml`)
+- **Package manager:** pnpm 10 workspaces, pinned through the `packageManager` field in the
+  root `package.json`. No Turborepo/Nx. Allowed install scripts are listed in
+  `pnpm-workspace.yaml` (`onlyBuiltDependencies`).
+- **Styling:** Tailwind CSS 4
+- **Testing:** Vitest (API), with priority on unit tests for the scoring calculator.
+  Unit tests: `*.spec.ts` next to the code; e2e tests: `apps/api/test/*.e2e-spec.ts`
+  (need the database).
+- **Linting:** oxlint (API), ESLint with `eslint-config-next` (web). Both treat `any` as an
+  error and fail on warnings.
+- **Ports:** web `3000`, API `3001`, Postgres `5432`.
 
 ## Working Agreements
 
@@ -57,7 +65,9 @@ RivBins/
 │   ├── api/                  # NestJS — the only app that touches the DB
 │   │   ├── prisma/           # schema.prisma, seed.ts, migrations/
 │   │   └── src/
+│   │       ├── generated/    # Prisma client (generated, git-ignored)
 │   │       ├── prisma/       # PrismaModule + PrismaService
+│   │       ├── health/       # GET /health (API + DB check)
 │   │       ├── warehouse/    # heatmap layout (aisles → racks → bins + current score)
 │   │       ├── bins/         # bin detail, search by code, score history
 │   │       ├── scoring/      # scoring.config.ts, scoring.calculator.ts (pure), service, controller
@@ -120,12 +130,18 @@ across bins so the scores spread across green, yellow, and red.
   bins that **do not already have a `PENDING` task**.
 - **AuditTask:** one per bin in a plan. Status is `PENDING` or `DONE`.
   Existing `PENDING` tasks are never modified when a new plan is created.
+  The database enforces **at most one `PENDING` task per bin** (partial unique index
+  `AuditTask_binId_pending_key`, raw SQL in the init migration). The plan service must
+  treat a violation as "bin already has a pending task" and skip it.
 - **AuditResult:** the outcome of counting one bin.
   - Per pallet line: expected qty, counted qty, difference.
   - Bin-level: auto-computed pass/fail (`autoOutcome`), the user's final pass/fail
     (`finalOutcome`, which may be an override), discrepancy ratio, and a timestamp.
   - Linked to its task when there is one. Ad-hoc counts (bin searched without a task)
     are allowed.
+- **Audit results cannot be deleted** while adjustments or score history reference them
+  (`ON DELETE RESTRICT`). Otherwise audit-generated adjustments would silently become
+  "manual" (null `auditResultId`) and inflate factor 3.
 - **BinScore:** an **append-only score history**. Every recompute inserts a new row and
   points `Bin.currentScoreId` at it, in one transaction. Rows are never updated.
 
