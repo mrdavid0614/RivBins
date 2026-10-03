@@ -73,6 +73,9 @@ automatically. At the start of a session:
    it as the first commit of the next feature branch, **right after the plan is approved
    and the branch is created** (never on `develop`):
    `docs(transcripts): add <NN-name> session transcript`.
+   Before committing, scan the file for secrets (tokens, passwords, connection strings
+   with credentials, private keys) and show the user what was found. Redact anything
+   sensitive with the user's approval; if in doubt, don't commit it.
 
 ### Session transcripts (`/export` + `/clear`)
 **Before a feature's PR is reviewed**, its branch must include the Roadmap update: mark
@@ -108,8 +111,9 @@ process is in `.claude/rules/git-workflow.md`.
 
 ## Roadmap
 
-One feature per session. Each row is one `feature/*` branch, one PR, and one transcript in
-`docs/transcripts/`.
+One feature per session, and one transcript per row in `docs/transcripts/`. Each feature
+normally has one `feature/*` branch and one PR. Exceptions: row 00 (setup) spans several
+PRs, and the last row's transcript goes on `release/1.0.0`.
 
 | #  | Feature                                             | Transcript         | Status   |
 |----|-----------------------------------------------------|--------------------|----------|

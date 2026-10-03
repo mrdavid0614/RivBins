@@ -239,6 +239,7 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
+- **Status:** Amended by D-031 (transcript commit timing, last transcript on `release/1.0.0`).
 - **Date:** 2026-10-03
 - **Area:** Process
 - **Decision:**
@@ -271,3 +272,14 @@ All decisions made during development, in chronological order.
   - The last feature's transcript goes on `release/1.0.0`, which merges into `main`
     (tagged `v1.0.0`) and back into `develop`. The release session is not exported.
   - `transcripts` is added to the allowed Conventional Commit scopes.
+
+## D-032 — Secret scan before committing transcripts
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the three findings from the third `/code-review` of the transcript
+  workflow:
+  - Before a transcript is committed, scan it for secrets, show the findings, and redact
+    with the user's approval (or don't commit it).
+  - Mark D-029 as amended by D-031.
+  - Correct the Roadmap intro: row 00 spans several PRs, and the last transcript goes on
+    `release/1.0.0`.
