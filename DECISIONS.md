@@ -307,3 +307,13 @@ All decisions made during development, in chronological order.
   - The release session marks the Release row `Done`.
 - **Rationale:** Fixes the fifth `/code-review` findings. Showing secrets while flagging
   them would copy them into the next transcript.
+
+## D-035 — Scan and redact transcripts without printing secrets
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the sixth `/code-review` of the transcript
+  workflow:
+  - Scan transcripts with commands that print only line numbers and pattern types, redact
+    with in-place `sed` shape patterns, and never open hit lines with Read or Edit.
+  - Correct the Roadmap intro: transcripts exist for feature rows 00–05 only, transcript
+    05 goes on `release/1.0.0`, and the Release row has none.

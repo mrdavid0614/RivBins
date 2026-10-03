@@ -106,9 +106,14 @@ commits transcript 05 there (after **Transcript safety**), and marks the Release
 - **Before `/export`:** in the preview, flag sensitive content the same way (location and
   type only).
 - **Before committing a transcript:** scan the file for secrets (tokens, passwords,
-  connection strings with credentials, private keys) and report hits the same way. Redact
-  them in the file with the user's approval. If in doubt, don't commit it: move it out of
-  the repo (e.g. `~/RivBins-transcripts/`).
+  connection strings with credentials, private keys) **without printing them**:
+  - Scan with commands that output only line numbers and the pattern type, never the
+    matched text, e.g. `grep -nE 'postgres(ql)?://[^:]+:[^@]+@' file | cut -d: -f1`.
+  - Redact with an in-place `sed -E` whose pattern describes the *shape* of the secret,
+    never its literal value, e.g. `s#(postgres(ql)?://[^:]+:)[^@]+@#\1****@#g`.
+  - Never open hit lines with Read or Edit.
+  - Redact only with the user's approval. If in doubt, don't commit it: move it out of the
+    repo (e.g. `~/RivBins-transcripts/`).
 
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
@@ -121,9 +126,10 @@ process is in `.claude/rules/git-workflow.md`.
 
 ## Roadmap
 
-One feature per session, and one transcript per row in `docs/transcripts/`. Each feature
-normally has one `feature/*` branch and one PR. Exceptions: row 00 (setup) spans several
-PRs, and the last row's transcript goes on `release/1.0.0`.
+One feature per session, and one transcript per feature row (00–05) in
+`docs/transcripts/`. Each feature normally has one `feature/*` branch and one PR.
+Exceptions: row 00 (setup) spans several PRs, transcript 05 goes on `release/1.0.0`, and
+the Release row (R) has no transcript.
 
 | #  | Feature                                             | Transcript         | Status   |
 |----|-----------------------------------------------------|--------------------|----------|
