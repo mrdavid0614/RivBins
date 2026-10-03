@@ -12,15 +12,22 @@ export class ApiError extends Error {
 
 /** Typed fetch against the NestJS API. Never cached: scores change on every recompute. */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers,
   });
 
   if (!response.ok) {
     throw new ApiError(response.status, `${init?.method ?? 'GET'} ${path} failed with ${response.status}`);
   }
 
-  return (await response.json()) as T;
+  // 204 / empty body (e.g. action endpoints) → undefined
+  const body = await response.text();
+  return (body ? JSON.parse(body) : undefined) as T;
 }
