@@ -69,13 +69,16 @@ Sessions are cleared between features, so this file is the only context that loa
 automatically. At the start of a session:
 
 1. Read `DECISIONS.md` and the **Roadmap** below to see what's done and what's next.
+   If the `Next` row is the **Release**, don't plan a feature: follow the last-feature
+   exception in "Session transcripts".
 2. If `docs/transcripts/` has an uncommitted transcript from the previous feature, commit
    it as the first commit of the next feature branch, **right after the plan is approved
    and the branch is created** (never on `develop`):
    `docs(transcripts): add <NN-name> session transcript`.
    Before committing, scan the file for secrets (tokens, passwords, connection strings
    with credentials, private keys) and show the user what was found. Redact anything
-   sensitive with the user's approval; if in doubt, don't commit it.
+   sensitive with the user's approval. If in doubt, don't commit it: move it out of the
+   repo (e.g. `~/RivBins-transcripts/`) so it can't be committed later by accident.
 
 ### Session transcripts (`/export` + `/clear`)
 **Before a feature's PR is reviewed**, its branch must include the Roadmap update: mark
@@ -123,6 +126,7 @@ PRs, and the last row's transcript goes on `release/1.0.0`.
 | 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Planned  |
 | 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
 | 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
+| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Planned |
 
 ## Project Structure
 

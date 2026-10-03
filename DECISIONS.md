@@ -283,3 +283,13 @@ All decisions made during development, in chronological order.
   - Mark D-029 as amended by D-031.
   - Correct the Roadmap intro: row 00 spans several PRs, and the last transcript goes on
     `release/1.0.0`.
+
+## D-033 — Declined transcripts and the release row
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the fourth `/code-review` of the transcript
+  workflow:
+  - A transcript that isn't committed (possible secrets) is moved out of the repo, e.g.
+    to `~/RivBins-transcripts/`.
+  - The Roadmap gets a Release row after feature 05, and the start-of-session checklist
+    says to follow the release exception when that row is `Next`.
