@@ -103,6 +103,9 @@ commits transcript 05 there (after **Transcript safety**), and marks the Release
 - **Never repeat a secret in the conversation.** When reporting a sensitive hit, give only
   its location and type, with a masked value (e.g. "line 812: Postgres URL with password
   `post…://riv…:****@…`"). Repeating it would put it into the next transcript.
+- **Never print a committed transcript's contents.** The only command that reads them is
+  the gitleaks scan. Any `git diff`, `git show` or `git log -p` on a branch with
+  transcripts must exclude them: `-- . ':(exclude)docs/transcripts'`.
 - **Before `/export`:** in the preview, flag sensitive content the same way (location and
   type only).
 - **Before committing a transcript:** scan it with

@@ -239,7 +239,7 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
-- **Status:** Amended by D-030 to D-038 (roadmap timing, commit timing, release
+- **Status:** Amended by D-030 to D-039 (roadmap timing, commit timing, release
   transcript, declined transcripts, secret scanning and redaction).
 - **Date:** 2026-10-03
 - **Area:** Process
@@ -275,6 +275,7 @@ All decisions made during development, in chronological order.
   - `transcripts` is added to the allowed Conventional Commit scopes.
 
 ## D-032 — Secret scan before committing transcripts
+- **Status:** Amended by D-034 and D-037.
 - **Date:** 2026-10-03
 - **Area:** Process / Code review
 - **Decision:** Apply the three findings from the third `/code-review` of the transcript
@@ -310,6 +311,7 @@ All decisions made during development, in chronological order.
   them would copy them into the next transcript.
 
 ## D-035 — Scan and redact transcripts without printing secrets
+- **Status:** Superseded by D-037.
 - **Date:** 2026-10-03
 - **Area:** Process / Code review
 - **Decision:** Apply both findings from the sixth `/code-review` of the transcript
@@ -320,6 +322,7 @@ All decisions made during development, in chronological order.
     05 goes on `release/1.0.0`, and the Release row has none.
 
 ## D-036 — Portable redaction command and complete amendment marks
+- **Status:** Redaction part superseded by D-037.
 - **Date:** 2026-10-03
 - **Area:** Process / Code review
 - **Decision:** Apply both findings from the seventh `/code-review` of the transcript
@@ -359,3 +362,14 @@ All decisions made during development, in chronological order.
   health URL, and the dev URL were not. No values appeared in the output.
 - **Known limit:** a password with a literal `/` (normally URL-encoded as `%2F`) is not
   detected.
+
+## D-039 — Transcripts never enter the conversation through git
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the tenth `/code-review`:
+  - Committed transcripts are never printed. Every `git diff`/`git show`/`git log -p` on a
+    branch with transcripts excludes `docs/transcripts/`, and `/code-review` always
+    excludes it too. Otherwise each review would copy the previous transcript into the
+    session, and transcripts would nest and repeat any missed secret.
+  - Mark D-032 as amended by D-034 and D-037, D-035 as superseded by D-037, and D-036's
+    redaction part as superseded by D-037.
