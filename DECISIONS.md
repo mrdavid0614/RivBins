@@ -239,7 +239,7 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
-- **Status:** Amended by D-030 to D-039 (roadmap timing, commit timing, release
+- **Status:** Amended by D-030 to D-040 (roadmap timing, commit timing, release
   transcript, declined transcripts, secret scanning and redaction).
 - **Date:** 2026-10-03
 - **Area:** Process
@@ -373,3 +373,15 @@ All decisions made during development, in chronological order.
     session, and transcripts would nest and repeat any missed secret.
   - Mark D-032 as amended by D-034 and D-037, D-035 as superseded by D-037, and D-036's
     redaction part as superseded by D-037.
+
+## D-040 — Non-verbose transcript scan, review diff against the PR target, merge
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the eleventh `/code-review`:
+  - Scan transcripts without `-v` (it prints the text around findings). Write a JSON
+    report to a temp file and print only line numbers and rule IDs. Tested: exit 1 with
+    findings, 0 when clean, and no surrounding text printed.
+  - The review diff uses the PR's target branch (`develop` or `main`), not always
+    `develop`.
+  - The user asked to apply everything required to merge `feature/session-transcripts`
+    after this round.

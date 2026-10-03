@@ -108,10 +108,17 @@ commits transcript 05 there (after **Transcript safety**), and marks the Release
   transcripts must exclude them: `-- . ':(exclude)docs/transcripts'`.
 - **Before `/export`:** in the preview, flag sensitive content the same way (location and
   type only).
-- **Before committing a transcript:** scan it with
-  `gitleaks dir --config .gitleaks.toml --redact --no-banner -v docs/transcripts/<NN-name>.txt`
-  (gitleaks' default rules plus `url-with-credentials` from `.gitleaks.toml`).
-  - `--redact` hides the values. Report only the line number and rule ID of each finding.
+- **Before committing a transcript:** scan it with gitleaks (default rules plus
+  `url-with-credentials` from `.gitleaks.toml`). Never use `-v`: it prints the text around
+  each finding. Write the report to a temp file and print only line numbers and rule IDs:
+
+  ```bash
+  r=$(mktemp) && gitleaks dir --config .gitleaks.toml --redact --no-banner \
+    --report-format json --report-path "$r" docs/transcripts/<NN-name>.txt; echo "exit: $?"; \
+    python3 -c 'import json,sys; [print(f["StartLine"], f["RuleID"]) for f in json.load(open(sys.argv[1]))]' "$r"; rm -f "$r"
+  ```
+
+  - Report only the line number and rule ID of each finding.
   - If there are findings, **the user redacts them in their editor**, outside the session.
     Claude never opens or edits the lines with findings.
   - Re-run the scan; it must exit `0` (no findings) before the commit. If in doubt, don't
