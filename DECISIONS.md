@@ -148,3 +148,23 @@ All decisions made during development, in chronological order.
 - **Area:** Process
 - **Decision:** Use **git-flow** for branching and **Conventional Commits** for commit
   messages and PR titles. Rules are documented in `.claude/rules/git-workflow.md`.
+
+## D-018 — Mandatory code review for every PR
+- **Date:** 2026-10-02
+- **Area:** Process
+- **Decision:** Every PR must pass a review with the `/code-review` skill before merging.
+  When a finding needs a change, the proposed fix is shown to the user first and applied
+  only after approval. Rules are documented in `.claude/rules/git-workflow.md`.
+
+## D-019 — Default code review level is `medium`
+- **Date:** 2026-10-02
+- **Area:** Process
+- **Decision:** `/code-review` runs at level `medium` by default (fewer, high-confidence
+  findings).
+- **Alternatives considered:** `high` (broader coverage, may include uncertain findings).
+
+## D-020 — GitHub remote and PRs
+- **Date:** 2026-10-02
+- **Area:** Process
+- **Decision:** The remote is `git@github.com:mrdavid0614/RivBins.git`. PRs are opened on
+  GitHub. Rule changes also go through a `feature/*` branch and a reviewed PR.
