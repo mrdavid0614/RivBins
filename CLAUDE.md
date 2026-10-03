@@ -75,10 +75,7 @@ automatically. At the start of a session:
    it as the first commit of the next feature branch, **right after the plan is approved
    and the branch is created** (never on `develop`):
    `docs(transcripts): add <NN-name> session transcript`.
-   Before committing, scan the file for secrets (tokens, passwords, connection strings
-   with credentials, private keys) and show the user what was found. Redact anything
-   sensitive with the user's approval. If in doubt, don't commit it: move it out of the
-   repo (e.g. `~/RivBins-transcripts/`) so it can't be committed later by accident.
+   Before committing, follow **Transcript safety**.
 
 ### Session transcripts (`/export` + `/clear`)
 **Before a feature's PR is reviewed**, its branch must include the Roadmap update: mark
@@ -90,18 +87,28 @@ After every feature is **ready** (its PR passed `/code-review` and is merged int
 commands that **only the user can run**, so:
 
 1. **Show a preview** of what the session covered: the feature, the decisions made
-   (`D-XXX`), the PRs and commits, and the review findings. Flag anything in the
-   conversation that looks sensitive (credentials, tokens, private account details) before
-   it gets exported.
+   (`D-XXX`), the PRs and commits, and the review findings. Flag sensitive content
+   following **Transcript safety**.
 2. **Ask for confirmation** before the export.
 3. After the user confirms, give the exact command:
    `/export docs/transcripts/<NN-name>.txt` (names from the Roadmap, e.g. `01-schema-seed`).
 4. The user runs `/export`, then `/clear`, and starts the next feature in the new session.
 
-Exception, the last feature: its transcript goes on the `release/1.0.0` branch (created
-from `develop` after the last feature merges). That branch merges into `main`, gets
-tagged `v1.0.0`, and is merged back into `develop`. The release session itself is not
-exported.
+Exception, the last feature: the release session creates `release/1.0.0` from `develop`,
+commits transcript 05 there (after **Transcript safety**), and marks the Release row
+`Done`. That branch merges into `main`, gets tagged `v1.0.0`, and is merged back into
+`develop`. The release session itself is not exported.
+
+### Transcript safety (applies to every transcript, including the release)
+- **Never repeat a secret in the conversation.** When reporting a sensitive hit, give only
+  its location and type, with a masked value (e.g. "line 812: Postgres URL with password
+  `post…://riv…:****@…`"). Repeating it would put it into the next transcript.
+- **Before `/export`:** in the preview, flag sensitive content the same way (location and
+  type only).
+- **Before committing a transcript:** scan the file for secrets (tokens, passwords,
+  connection strings with credentials, private keys) and report hits the same way. Redact
+  them in the file with the user's approval. If in doubt, don't commit it: move it out of
+  the repo (e.g. `~/RivBins-transcripts/`).
 
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full

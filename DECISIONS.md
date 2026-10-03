@@ -293,3 +293,17 @@ All decisions made during development, in chronological order.
     to `~/RivBins-transcripts/`.
   - The Roadmap gets a Release row after feature 05, and the start-of-session checklist
     says to follow the release exception when that row is `Next`.
+
+## D-034 — Single "Transcript safety" rule
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Replace the scattered secret-handling steps with one **Transcript safety**
+  rule in `CLAUDE.md` that both the feature path and the release path reference:
+  - Never repeat a secret in the conversation; report only location, type, and a masked
+    value.
+  - Flag sensitive content that way in the export preview.
+  - Scan, then redact with approval (or move out of the repo) before committing any
+    transcript, including transcript 05 on `release/1.0.0`.
+  - The release session marks the Release row `Done`.
+- **Rationale:** Fixes the fifth `/code-review` findings. Showing secrets while flagging
+  them would copy them into the next transcript.
