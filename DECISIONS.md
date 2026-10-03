@@ -237,3 +237,19 @@ All decisions made during development, in chronological order.
   rules, tests, branch/commits, open questions) and wait for approval before writing
   code. Significant changes to an approved plan are proposed again before continuing.
   Documented in `CLAUDE.md` under Working Agreements.
+
+## D-029 — Session transcripts and roadmap
+- **Date:** 2026-10-03
+- **Area:** Process
+- **Decision:**
+  - After every feature is ready (PR reviewed and merged into `develop`), the session is
+    exported with `/export` and cleared with `/clear`. Both are run by the user.
+  - Before the export, Claude shows a **preview** of what the session covered (no extra
+    summary file), flags anything sensitive, and asks for confirmation.
+  - Transcripts are saved in `docs/transcripts/` and committed with the next feature's
+    branch, named `NN-name` (`00-project-setup`, `01-schema-seed`, `02-scoring`, ...).
+  - This setup session is exported as `00-project-setup`.
+  - `CLAUDE.md` gets a Roadmap (feature, transcript name, status) and a start-of-session
+    checklist, since only `CLAUDE.md` loads automatically after `/clear`.
+- **Alternatives considered:** An approved summary file next to each export; keeping
+  transcripts outside the repo; folding this session into `01-schema-seed`.

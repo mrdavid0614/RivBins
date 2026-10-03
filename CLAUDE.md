@@ -64,6 +64,30 @@ If the plan changes significantly during implementation, stop and propose the up
 plan before continuing. Approved plans and the decisions in them are recorded in
 `DECISIONS.md`.
 
+### Start of every session
+Sessions are cleared between features, so this file is the only context that loads
+automatically. At the start of a session:
+
+1. Read `DECISIONS.md` and the **Roadmap** below to see what's done and what's next.
+2. If `docs/transcripts/` has an uncommitted transcript from the previous feature, commit
+   it as the first commit of the next feature branch:
+   `docs(transcripts): add <NN-name> session transcript`.
+
+### Session transcripts (`/export` + `/clear`)
+After every feature is **ready** (its PR passed `/code-review` and is merged into
+`develop`), close the session with a transcript. `/export` and `/clear` are Claude Code
+commands that **only the user can run**, so:
+
+1. **Show a preview** of what the session covered: the feature, the decisions made
+   (`D-XXX`), the PRs and commits, and the review findings. Flag anything in the
+   conversation that looks sensitive (credentials, tokens, private account details) before
+   it gets exported.
+2. **Ask for confirmation** before the export.
+3. After the user confirms, give the exact command:
+   `/export docs/transcripts/<NN-name>.txt` (names from the Roadmap, e.g. `01-schema-seed`).
+4. The user runs `/export`, then `/clear`, and starts the next feature in the new session.
+5. Update the Roadmap status in the feature's PR, before the export.
+
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
 rules are in `.claude/rules/git-workflow.md`.
@@ -72,6 +96,20 @@ rules are in `.claude/rules/git-workflow.md`.
 **Every PR must pass a `/code-review` before merging.** When a finding needs a change,
 show the proposed fix to the user and wait for approval before applying it. The full
 process is in `.claude/rules/git-workflow.md`.
+
+## Roadmap
+
+One feature per session. Each row is one `feature/*` branch, one PR, and one transcript in
+`docs/transcripts/`.
+
+| #  | Feature                                             | Transcript         | Status   |
+|----|-----------------------------------------------------|--------------------|----------|
+| 00 | Project setup: business logic, decisions, scaffold  | `00-project-setup` | Done     |
+| 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Next     |
+| 02 | Scoring service + recompute                         | `02-scoring`       | Planned  |
+| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Planned  |
+| 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
+| 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
 
 ## Project Structure
 
