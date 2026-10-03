@@ -105,20 +105,14 @@ commits transcript 05 there (after **Transcript safety**), and marks the Release
   `post…://riv…:****@…`"). Repeating it would put it into the next transcript.
 - **Before `/export`:** in the preview, flag sensitive content the same way (location and
   type only).
-- **Before committing a transcript:** scan the file for secrets (tokens, passwords,
-  connection strings with credentials, private keys) **without printing them**:
-  - Scan with commands that output only line numbers and the pattern type, never the
-    matched text, e.g. `grep -nE 'postgres(ql)?://[^:]+:[^@]+@' file | cut -d: -f1`.
-  - Redact with an in-place `sed` whose pattern describes the *shape* of the secret,
-    never its literal value. On macOS use exactly this form (`-i ''` = no backup file):
-    `sed -E -i '' 's#(postgres(ql)?://[^:]+:)[^@]+@#\1****@#g' file`.
-  - Afterwards, count the hits that are still unmasked (prints only a number), e.g.
-    `grep -E 'postgres(ql)?://[^:]+:[^@]+@' file | grep -vc ':\*\*\*\*@'` must print `0`.
-    Then check with `git status --short docs/transcripts/` that only the expected
-    transcript is there (no backup copies).
-  - Never open hit lines with Read or Edit.
-  - Redact only with the user's approval. If in doubt, don't commit it: move it out of the
-    repo (e.g. `~/RivBins-transcripts/`).
+- **Before committing a transcript:** scan it with
+  `gitleaks dir --config .gitleaks.toml --redact --no-banner -v docs/transcripts/<NN-name>.txt`
+  (gitleaks' default rules plus `url-with-credentials` from `.gitleaks.toml`).
+  - `--redact` hides the values. Report only the line number and rule ID of each finding.
+  - If there are findings, **the user redacts them in their editor**, outside the session.
+    Claude never opens or edits the lines with findings.
+  - Re-run the scan; it must exit `0` (no findings) before the commit. If in doubt, don't
+    commit it: move it out of the repo (e.g. `~/RivBins-transcripts/`).
 
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full

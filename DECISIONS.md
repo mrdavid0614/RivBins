@@ -239,8 +239,8 @@ All decisions made during development, in chronological order.
   Documented in `CLAUDE.md` under Working Agreements.
 
 ## D-029 — Session transcripts and roadmap
-- **Status:** Amended by D-031, D-033, D-034, D-035, D-036 (commit timing, release
-  transcript, declined transcripts, secret scan and redaction).
+- **Status:** Amended by D-030 to D-037 (roadmap timing, commit timing, release
+  transcript, declined transcripts, secret scanning and redaction).
 - **Date:** 2026-10-03
 - **Area:** Process
 - **Decision:**
@@ -328,3 +328,19 @@ All decisions made during development, in chronological order.
     count of unmasked hits that must be `0`, and check `git status` for stray backups.
     Tested on a temporary file with a fake secret.
   - Mark D-029 as amended by every later decision that changed it.
+
+## D-037 — Scan transcripts with gitleaks; the user redacts
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Tooling
+- **Decision:** Replace the hand-written `grep`/`sed` secret rules with **gitleaks**
+  (installed with Homebrew, 8.30.1):
+  - Scan with `gitleaks dir --config .gitleaks.toml --redact`. `.gitleaks.toml` extends
+    the default rules with `url-with-credentials`, since the defaults miss connection
+    strings with passwords.
+  - Report only line numbers and rule IDs. The user redacts findings in their own editor,
+    outside the session, and the re-scan must exit `0` before the commit.
+- **Rationale:** Fixes the eighth `/code-review` findings. The hand-written patterns only
+  covered Postgres URLs and missed passwords containing `@`. Tested on a temporary file
+  with a fake GitHub token, a private key, and a URL with an `@` in the password: all
+  three were found, and no value appeared in the output.
+- **Alternatives considered:** Extending the `grep`/`sed` patterns per secret type.

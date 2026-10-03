@@ -1,0 +1,11 @@
+# Secret scanning for session transcripts (see "Transcript safety" in CLAUDE.md).
+# Extends gitleaks' default rules.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "url-with-credentials"
+description = "URL with an embedded password (e.g. database connection strings)"
+regex = '''[a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:[^\s]+@[^\s/:]+'''
+keywords = ["://"]
