@@ -201,3 +201,11 @@ All decisions made during development, in chronological order.
 - **Area:** Tech stack
 - **Decision:** Keep PostgreSQL 17 (`postgres:17-alpine`) in `docker-compose.yml`.
 - **Alternatives considered:** PostgreSQL 16 (already available locally).
+
+## D-025 — Review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply all four `/code-review` findings on `feature/monorepo-scaffold`:
+  generate the Prisma client before API typecheck/tests, remove the `db:seed` placeholder
+  until the seed exists, build request headers with `Headers` (JSON content type only for
+  non-FormData bodies), and treat empty API responses as `undefined`.
