@@ -1,6 +1,6 @@
 {
   "name": "rivbins",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Smart Cycle Count Scoring \u2014 risk-based bin auditing for warehouses",
   "packageManager": "pnpm@10.34.6",
