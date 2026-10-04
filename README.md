@@ -140,6 +140,35 @@ A count resets factors 1–3. A passed count also brings factor 5 to about 0, so
 drops sharply. A failed count raises factor 4, and factor 5 shows how far off it was, so
 the bin stays risky.
 
+## Heatmap dashboard
+
+The home page (`http://localhost:3000`) shows every bin grouped by aisle and rack, one
+grid per rack (top shelf first). Bins are colored by their current score:
+
+| Band | Score |
+|------|-------|
+| Green (low risk) | 0–39 |
+| Yellow (medium risk) | 40–69 |
+| Red (high risk) | 70–100 |
+| Gray | not scored yet |
+
+Click a bin to open its detail drawer (`/?bin=A-01-03`, shareable). It shows the current
+score with the per-factor breakdown, the score history with the trigger of each change,
+the last audit date, and the pallets in the bin with their product lines. "Recompute
+scores" rescores every bin and refreshes the heatmap.
+
+## API
+
+| Method | Path | Returns |
+|--------|------|---------|
+| `GET` | `/health` | API and database status |
+| `GET` | `/warehouse/layout` | Aisles → racks → bins with each bin's current score |
+| `GET` | `/bins/:code` | Bin detail: location, last audit, current score with breakdown, pallets (404 if unknown) |
+| `GET` | `/bins/:code/scores?limit=20` | Score history, newest first (`limit` 1–100, default 20) |
+| `POST` | `/scoring/recompute` | Rescores every bin; returns `{ trigger, binsRecomputed, computedAt }` |
+
+Bin codes are matched case-insensitively.
+
 ## Project docs
 
 - [`CLAUDE.md`](CLAUDE.md): business rules, scoring model, and conventions.
