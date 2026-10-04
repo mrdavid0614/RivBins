@@ -344,6 +344,11 @@ The user counts **each product line on each pallet** in the bin.
 4. Mark the bin's `PENDING` task as `DONE`, if one exists.
 5. Recompute that bin's score.
 
+All five steps run in one transaction, and its **first write updates the `Bin` row**
+(`lastAuditedAt`). That locks the bin, so a concurrent "Recompute scores" can't overwrite
+the new `AUDIT` score with one built from pre-audit inputs. The scoring code locks the
+bins it scores in id order before reading their inputs (D-056).
+
 ## Features / Screens
 
 ### 1. Heatmap Dashboard

@@ -519,3 +519,17 @@ All decisions made during development, in chronological order.
 - **Area:** Scoring
 - **Decision:** Factor 6 counts distinct products on pallet lines with `quantity > 0`. A
   line counted down to 0 holds no product.
+
+## D-056 — Recompute locks bins before reading inputs
+- **Date:** 2026-10-04
+- **Area:** Scoring / Code review
+- **Decision:** Apply the `/code-review` finding on PR #8: every score computation runs
+  `SELECT … FOR UPDATE` on its bins, in id order, before loading inputs. The count flow
+  (feature 05) must update the `Bin` row first in its transaction, which takes the same
+  lock.
+- **Rationale:** Without the lock, a manual recompute that read a bin's inputs before a
+  concurrent count committed would repoint `currentScoreId` at a score built from
+  pre-audit inputs. A new e2e test reproduces the race: it fails without the lock and
+  passes with it. Id order avoids deadlocks between concurrent recomputes.
+- **Alternatives considered:** A conditional pointer update based on `computedAt`;
+  serializable isolation with retries.
