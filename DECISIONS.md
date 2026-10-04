@@ -521,6 +521,7 @@ All decisions made during development, in chronological order.
   line counted down to 0 holds no product.
 
 ## D-056 — Recompute locks bins before reading inputs
+- **Status:** Amended by D-057.
 - **Date:** 2026-10-04
 - **Area:** Scoring / Code review
 - **Decision:** Apply the `/code-review` finding on PR #8: every score computation runs
@@ -533,3 +534,17 @@ All decisions made during development, in chronological order.
   passes with it. Id order avoids deadlocks between concurrent recomputes.
 - **Alternatives considered:** A conditional pointer update based on `computedAt`;
   serializable isolation with retries.
+
+## D-057 — Score timestamp after the lock; `FOR NO KEY UPDATE`
+- **Date:** 2026-10-04
+- **Area:** Scoring / Code review
+- **Decision:** Apply both findings from the second `/code-review` of PR #8:
+  - `computeAndStoreScores` takes `now` after the bin lock and returns it. Otherwise a
+    count committed while the recompute waited (`countedAt` later than `now`) was left
+    out of factors 4 and 5. The e2e race test now also saves a failed audit while the
+    recompute waits; it fails with the old timestamp and passes with the fix.
+  - Lock with `FOR NO KEY UPDATE` instead of `FOR UPDATE`. It still conflicts with the
+    count flow's `UPDATE "Bin"`, but inserts that reference a bin (movements, tasks,
+    audits) no longer wait or deadlock. Checked against Postgres: a movement insert is
+    blocked by `FOR UPDATE` and not by `FOR NO KEY UPDATE`; the bin update is blocked
+    by both.

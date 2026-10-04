@@ -347,7 +347,8 @@ The user counts **each product line on each pallet** in the bin.
 All five steps run in one transaction, and its **first write updates the `Bin` row**
 (`lastAuditedAt`). That locks the bin, so a concurrent "Recompute scores" can't overwrite
 the new `AUDIT` score with one built from pre-audit inputs. The scoring code locks the
-bins it scores in id order before reading their inputs (D-056).
+bins it scores in id order (`FOR NO KEY UPDATE`) before reading their inputs and taking
+the score timestamp (D-056, D-057).
 
 ## Features / Screens
 
