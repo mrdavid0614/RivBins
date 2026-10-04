@@ -132,7 +132,7 @@ describe('ScoringService', () => {
 
       expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
       const [sql, ids] = tx.$queryRaw.mock.calls[0] as [TemplateStringsArray, number[]];
-      expect(sql.join('?')).toMatch(/ORDER BY id FOR UPDATE/);
+      expect(sql.join('?')).toMatch(/ORDER BY id FOR NO KEY UPDATE/);
       expect(ids).toEqual([7]);
       const lockOrder = tx.$queryRaw.mock.invocationCallOrder[0] ?? Infinity;
       expect(lockOrder).toBeLessThan(

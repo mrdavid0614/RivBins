@@ -32,8 +32,11 @@ export async function computeAndStoreScores(
   // concurrent count then either finishes first, and we read its committed
   // changes, or waits for us. Without this, a full recompute could repoint
   // currentScoreId at a score built from pre-audit inputs (D-056).
+  // NO KEY UPDATE still conflicts with the count flow's UPDATE "Bin", but not with
+  // inserts of rows that reference a bin (movements, tasks, audits), so those
+  // don't wait for the recompute or deadlock with it (D-057).
   await tx.$queryRaw`
-    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id FOR UPDATE`;
+    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id FOR NO KEY UPDATE`;
 
   // Only after the lock: a count committed while we waited must not look like it
   // happened after `now`, or factors 4 and 5 would leave it out (D-057).
