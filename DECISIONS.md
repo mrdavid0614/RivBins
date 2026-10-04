@@ -548,3 +548,11 @@ All decisions made during development, in chronological order.
     audits) no longer wait or deadlock. Checked against Postgres: a movement insert is
     blocked by `FOR UPDATE` and not by `FOR NO KEY UPDATE`; the bin update is blocked
     by both.
+
+## D-058 — Race test cleans up after a failed assertion
+- **Date:** 2026-10-04
+- **Area:** Testing / Code review
+- **Decision:** Apply the third `/code-review` finding on PR #8: the e2e race test waits
+  for its simulated count to finish before cleanup, so the FAIL audit it creates is
+  always deleted. Verified by forcing an early assertion failure: the seeded database
+  kept exactly its 28 audits. The third review found no issues in the production code.
