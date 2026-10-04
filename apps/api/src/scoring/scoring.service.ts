@@ -12,22 +12,21 @@ export class ScoringService {
 
   /** Manual "Recompute scores": every bin gets a new MANUAL_RECOMPUTE row (D-005). */
   async recomputeAll(): Promise<RecomputeScoresResponse> {
-    const now = new Date();
-    const binsRecomputed = await this.prisma.$transaction(
+    const { scored, computedAt } = await this.prisma.$transaction(
       async (tx) => {
         const bins = await tx.bin.findMany({ select: { id: true } });
         return computeAndStoreScores(
           tx,
           bins.map((b) => b.id),
-          { trigger: 'MANUAL_RECOMPUTE', now },
+          { trigger: 'MANUAL_RECOMPUTE' },
         );
       },
       { timeout: TX_TIMEOUT_MS },
     );
     return {
       trigger: 'MANUAL_RECOMPUTE',
-      binsRecomputed,
-      computedAt: now.toISOString(),
+      binsRecomputed: scored,
+      computedAt: computedAt.toISOString(),
     };
   }
 
@@ -42,10 +41,9 @@ export class ScoringService {
     tx?: ScoringDb,
   ): Promise<void> {
     const run = async (db: ScoringDb): Promise<void> => {
-      const scored = await computeAndStoreScores(db, [binId], {
+      const { scored } = await computeAndStoreScores(db, [binId], {
         trigger,
         auditResultId,
-        now: new Date(),
       });
       if (scored === 0) throw new NotFoundException(`Bin ${binId} not found`);
     };

@@ -69,6 +69,7 @@ describe('Scoring (e2e)', () => {
       select: { id: true, lastAuditedAt: true },
     });
 
+    let auditId: number | undefined;
     let release = (): void => {};
     const gate = new Promise<void>((resolve) => (release = resolve));
     let locked = (): void => {};
@@ -76,7 +77,8 @@ describe('Scoring (e2e)', () => {
 
     try {
       // Stands in for the count flow: it updates the bin first (D-056), which
-      // locks the row, and commits only when the gate opens.
+      // locks the row. Once the gate opens, after the recompute has started and
+      // is waiting, it saves a failed audit and commits.
       const count = prisma.$transaction(async (tx) => {
         await tx.bin.update({
           where: { id: bin.id },
@@ -84,6 +86,19 @@ describe('Scoring (e2e)', () => {
         });
         locked();
         await gate;
+        const audit = await tx.auditResult.create({
+          data: {
+            binId: bin.id,
+            autoOutcome: 'FAIL',
+            finalOutcome: 'FAIL',
+            totalExpected: 100,
+            totalCounted: 75,
+            discrepancyRatio: 0.25,
+            countedAt: new Date(),
+          },
+          select: { id: true },
+        });
+        auditId = audit.id;
       });
       await lockTaken;
 
@@ -107,11 +122,17 @@ describe('Scoring (e2e)', () => {
         include: { currentScore: true },
       });
       const factors = current.currentScore?.factors as unknown as FactorBreakdown[];
-      const days = factors.find((f) => f.key === 'timeSinceLastAudit')?.rawValue;
-      expect(days).toBe(0); // the committed audit date, not "never audited"
+      const raw = (key: string) => factors.find((f) => f.key === key)?.rawValue;
+      expect(raw('timeSinceLastAudit')).toBe(0); // not "never audited"
+      // The audit committed while the recompute waited is in factors 4 and 5 (D-057).
+      expect(raw('auditFailureHistory')).toBe(1);
+      expect(raw('lastDiscrepancySize')).toBe(0.25);
     } finally {
       release();
-      // Put the seeded state back and refresh its score.
+      // Undo the simulated count: its audit, the bin's audit date, and its score.
+      if (auditId !== undefined) {
+        await prisma.auditResult.delete({ where: { id: auditId } });
+      }
       await prisma.bin.update({
         where: { id: bin.id },
         data: { lastAuditedAt: bin.lastAuditedAt },

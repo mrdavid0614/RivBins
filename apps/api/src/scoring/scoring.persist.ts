@@ -10,16 +10,20 @@ export interface PersistScoresOptions {
   trigger: ScoreTrigger;
   /** Required when trigger = AUDIT. */
   auditResultId?: number;
-  /** Shared by every row of the run; becomes BinScore.computedAt. */
-  now: Date;
 }
 
-/** Returns the number of bins scored (bins that don't exist are skipped). */
+export interface PersistScoresResult {
+  /** Bins scored (bins that don't exist are skipped). */
+  scored: number;
+  /** Taken after the lock; shared by every row of the run (BinScore.computedAt). */
+  computedAt: Date;
+}
+
 export async function computeAndStoreScores(
   tx: ScoringDb,
   binIds: readonly number[],
-  { trigger, auditResultId, now }: PersistScoresOptions,
-): Promise<number> {
+  { trigger, auditResultId }: PersistScoresOptions,
+): Promise<PersistScoresResult> {
   if ((trigger === 'AUDIT') !== (auditResultId !== undefined)) {
     throw new Error('auditResultId is required for, and only for, AUDIT scores');
   }
@@ -31,6 +35,9 @@ export async function computeAndStoreScores(
   await tx.$queryRaw`
     SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id FOR UPDATE`;
 
+  // Only after the lock: a count committed while we waited must not look like it
+  // happened after `now`, or factors 4 and 5 would leave it out (D-057).
+  const now = new Date();
   const inputs = await loadScoringInputs(tx, binIds, now);
 
   for (const [binId, binInputs] of inputs) {
@@ -52,5 +59,5 @@ export async function computeAndStoreScores(
     });
   }
 
-  return inputs.size;
+  return { scored: inputs.size, computedAt: now };
 }

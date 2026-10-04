@@ -47,10 +47,9 @@ async function main(): Promise<void> {
     adapter: new PrismaPg({ connectionString }),
   });
   try {
-    const now = new Date();
-    const data = generateSeedData({ now });
+    const data = generateSeedData({ now: new Date() });
 
-    const scored = await prisma.$transaction(
+    const { scored } = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRawUnsafe(
           `TRUNCATE TABLE ${ALL_TABLES.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`,
@@ -77,7 +76,7 @@ async function main(): Promise<void> {
         return computeAndStoreScores(
           tx,
           data.bins.map((b) => b.id),
-          { trigger: 'SEED', now },
+          { trigger: 'SEED' },
         );
       },
       { timeout: 60_000 },
