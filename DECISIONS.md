@@ -567,3 +567,54 @@ All decisions made during development, in chronological order.
   The Release row (`v1.0.0`) stays planned after feature 05.
 - **Alternatives considered:** A direct `develop` → `main` PR as a one-time exception to
   the git-flow rule; waiting for `v1.0.0`.
+
+## D-060 — Feature 03 plan: heatmap dashboard and bin detail
+- **Date:** 2026-10-04
+- **Area:** Heatmap / API / Process
+- **Decision:** Approve the plan for feature 03 (`feature/heatmap-dashboard`):
+  - `GET /warehouse/layout` returns aisles → racks → bins with each bin's current score.
+  - `GET /bins/:code` returns the bin detail (location, last audit, current score with
+    its factor breakdown, pallets and lines). `GET /bins/:code/scores?limit=` returns
+    the score history, newest first.
+  - Contract types live in `@rivbins/shared`; the API maps Prisma rows with pure,
+    unit-tested mappers; e2e tests run against the seeded database.
+  - The web page stays a server component; "Recompute scores" is a server action that
+    calls `POST /scoring/recompute` and revalidates the page.
+  - Out of scope: bin search/count flow (05), pending-task badges (04), live updates.
+
+## D-061 — Heatmap color bands
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** Three fixed bands: 0–39 green (low), 40–69 yellow (medium), 70–100 red
+  (high). Bins with no score are gray. A legend shows the bands.
+- **Alternatives considered:** A continuous green → red gradient.
+
+## D-062 — Bins are addressed by code in the API
+- **Date:** 2026-10-04
+- **Area:** API
+- **Decision:** Bin detail and history use the human-readable code
+  (`/bins/A-01-03`), so feature 05's search/scan can reuse the same endpoint.
+- **Alternatives considered:** The numeric id.
+
+## D-063 — Score history defaults to the last 20 rows
+- **Date:** 2026-10-04
+- **Area:** API / Heatmap
+- **Decision:** `GET /bins/:code/scores` returns the newest 20 rows by default, with an
+  optional `limit` (1–100). Every recompute appends a row per bin, so the full history
+  grows without bound.
+- **Alternatives considered:** Always returning the full history.
+
+## D-064 — Server-rendered bin drawer
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** The bin detail drawer opens from the `?bin=<code>` search parameter and
+  is rendered on the server. The URL is shareable and the API stays server-side only.
+- **Alternatives considered:** A client drawer fetching the API directly (needs CORS
+  and a public API URL).
+
+## D-065 — The drawer hides pallet lines with quantity 0
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** The bin detail lists only pallet lines with `quantity > 0`, matching
+  factor 6 (D-055): a line counted down to 0 holds no product.
+- **Alternatives considered:** Showing them dimmed.
