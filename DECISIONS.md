@@ -457,3 +457,65 @@ All decisions made during development, in chronological order.
   `pnpm db:generate` first, like the other scripts that need the client, so the README's
   fresh-clone order (install → migrate → seed) works. Verified by deleting the generated
   client and running `pnpm db:seed`.
+
+## D-049 — Feature 02 plan: scoring service and recompute
+- **Date:** 2026-10-04
+- **Area:** Scoring / Process
+- **Decision:** Approve the plan for feature 02 (`feature/scoring-service`):
+  - `scoring.config.ts` holds the factors, thresholds, weights, and the 90-day failure
+    window. `scoring.calculator.ts` is a pure function with unit tests.
+  - `loadScoringInputs(db, binIds, now)` reads the inputs for many bins in batched
+    queries and accepts a Prisma client or a transaction, so the service and the seed
+    runner share it.
+  - `ScoringService.recomputeAll(trigger)` and `recomputeBin(binId, trigger,
+    auditResultId?, tx?)` insert `BinScore` rows and repoint `Bin.currentScoreId` in one
+    transaction, with one `now` per run. Feature 05 calls `recomputeBin` with `AUDIT`.
+  - `POST /scoring/recompute` recomputes all bins.
+  - The seed runner stores a `SEED` score for every bin (completes D-042).
+  - Read endpoints for scores and history are left to feature 03.
+  - Tests: calculator and service unit tests, plus a recompute e2e test that only
+    appends rows.
+
+## D-050 — Final scoring thresholds and weights
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Keep the proposed values: time since last audit 30 days / 0.25,
+  activity 60 movements / 0.20, manual adjustments 5 / 0.15, failures in 90 days 2 /
+  0.15, last discrepancy 20% / 0.15, SKU mix 6 SKUs / 0.10.
+
+## D-051 — Fractional days and display rounding
+- **Status:** Amended by D-054.
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 1 uses fractional days. The stored `rawValue`, `normalized`, and
+  `points` are rounded to 2 decimals for display, while the score is rounded from the
+  unrounded sum.
+- **Rationale:** Whole days would make scores jump at midnight.
+- **Alternatives considered:** Whole days.
+
+## D-052 — Discrepancy stored as a ratio
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 5's raw value and threshold are ratios (`0.12`, `0.2`). The UI
+  formats them as percentages.
+
+## D-053 — Recompute endpoint returns a summary
+- **Date:** 2026-10-04
+- **Area:** API
+- **Decision:** `POST /scoring/recompute` returns `{ trigger, binsRecomputed,
+  computedAt }`. The heatmap refetches its own data afterwards.
+- **Alternatives considered:** Returning every new score.
+
+## D-054 — Discrepancy ratio keeps 4 decimals
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 5's stored `rawValue` is rounded to 4 decimals (a percentage with
+  2), not 2. Other raw values, `normalized`, and `points` keep 2 decimals (D-051).
+- **Rationale:** With 2 decimals a ratio of `0.0993` showed as `0.1` while its points
+  (7.45) came from the exact value, so the breakdown didn't add up.
+
+## D-055 — SKU mix counts only lines with stock
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 6 counts distinct products on pallet lines with `quantity > 0`. A
+  line counted down to 0 holds no product.
