@@ -146,8 +146,8 @@ the Release row (R) has no transcript.
 |----|-----------------------------------------------------|--------------------|----------|
 | 00 | Project setup: business logic, decisions, scaffold  | `00-project-setup` | Done     |
 | 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Done     |
-| 02 | Scoring service + recompute                         | `02-scoring`       | Next     |
-| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Planned  |
+| 02 | Scoring service + recompute                         | `02-scoring`       | Done     |
+| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Next     |
 | 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
 | 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
 | R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Planned |
@@ -266,7 +266,7 @@ be recomputed on its own.
 | 3 | Adjustments since last audit | Manual `ADJUSTMENT` count since last audit                                   | 5 adjustments        | 0.15              |
 | 4 | Audit failure history        | Audits with `finalOutcome = FAIL` in the last 90 days (does **not** reset on audit) | 2 failures    | 0.15              |
 | 5 | Last discrepancy size        | `Σ|counted − expected| / Σ expected` from the last audit (never audited = 0) | 20%                  | 0.15              |
-| 6 | SKU mix                      | Distinct products currently in the bin                                       | 6 SKUs               | 0.10              |
+| 6 | SKU mix                      | Distinct products currently in the bin (lines with quantity > 0)             | 6 SKUs               | 0.10              |
 
 **SKU mix normalization:** `min((distinctSkus − 1) / (threshold − 1), 1)`, so a
 single-SKU bin scores 0 and a bin with 6 or more SKUs scores 1. An empty bin also scores 0.
@@ -343,6 +343,12 @@ The user counts **each product line on each pallet** in the bin.
 3. Update the bin's last audit date.
 4. Mark the bin's `PENDING` task as `DONE`, if one exists.
 5. Recompute that bin's score.
+
+All five steps run in one transaction, and its **first write updates the `Bin` row**
+(`lastAuditedAt`). That locks the bin, so a concurrent "Recompute scores" can't overwrite
+the new `AUDIT` score with one built from pre-audit inputs. The scoring code locks the
+bins it scores in id order (`FOR NO KEY UPDATE`) before reading their inputs and taking
+the score timestamp (D-056, D-057).
 
 ## Features / Screens
 
