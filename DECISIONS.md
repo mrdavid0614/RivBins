@@ -618,3 +618,17 @@ All decisions made during development, in chronological order.
 - **Decision:** The bin detail lists only pallet lines with `quantity > 0`, matching
   factor 6 (D-055): a line counted down to 0 holds no product.
 - **Alternatives considered:** Showing them dimmed.
+
+## D-066 — Implementation adjustments in feature 03
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** Two small changes to the approved plan (D-060), made during
+  implementation:
+  - The recompute server action calls `refresh()` from `next/cache` instead of
+    `revalidatePath('/')`. The heatmap is a dynamic page (`no-store` fetches,
+    `searchParams`), and Next 16 documents `refresh()` for refreshing the current page
+    after a Server Action.
+  - The drawer's score history collapses consecutive rows with the same score and
+    trigger into one line ("Manual recompute ×12", with a time range). Audit rows are
+    never merged. The API still returns every row (D-063); only the presentation
+    changes, so the timeline shows the changes instead of 20 identical rows.

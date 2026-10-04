@@ -147,8 +147,8 @@ the Release row (R) has no transcript.
 | 00 | Project setup: business logic, decisions, scaffold  | `00-project-setup` | Done     |
 | 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Done     |
 | 02 | Scoring service + recompute                         | `02-scoring`       | Done     |
-| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Next     |
-| 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
+| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Done     |
+| 04 | Audit plans + tasks                                 | `04-audit-plans`   | Next     |
 | 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
 | R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Planned |
 
