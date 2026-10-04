@@ -1,5 +1,5 @@
 // Requires a seeded database: run `pnpm db:up`, `pnpm db:migrate`, and `pnpm db:seed`.
-// Only appends score rows; it never deletes data.
+// Appends score rows. The race test restores the bin and deletes the audit it creates.
 import type { Server } from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -70,6 +70,7 @@ describe('Scoring (e2e)', () => {
     });
 
     let auditId: number | undefined;
+    let count: Promise<void> | undefined;
     let release = (): void => {};
     const gate = new Promise<void>((resolve) => (release = resolve));
     let locked = (): void => {};
@@ -79,7 +80,7 @@ describe('Scoring (e2e)', () => {
       // Stands in for the count flow: it updates the bin first (D-056), which
       // locks the row. Once the gate opens, after the recompute has started and
       // is waiting, it saves a failed audit and commits.
-      const count = prisma.$transaction(async (tx) => {
+      count = prisma.$transaction(async (tx) => {
         await tx.bin.update({
           where: { id: bin.id },
           data: { lastAuditedAt: new Date() },
@@ -129,6 +130,9 @@ describe('Scoring (e2e)', () => {
       expect(raw('lastDiscrepancySize')).toBe(0.25);
     } finally {
       release();
+      // Let the simulated count finish, even after a failed assertion, so its
+      // audit is known and can be deleted.
+      await count?.catch(() => undefined);
       // Undo the simulated count: its audit, the bin's audit date, and its score.
       if (auditId !== undefined) {
         await prisma.auditResult.delete({ where: { id: auditId } });
