@@ -1,8 +1,10 @@
-// Seed runner: wipes the database and inserts the generated data (D-042, D-046).
+// Seed runner: wipes the database, inserts the generated data, and stores the
+// initial SEED score of every bin (D-042, D-046, D-049).
 // Run with `pnpm db:seed` (Prisma runs it through tsx, see prisma.config.ts).
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { computeAndStoreScores } from '../src/scoring/scoring.persist.js';
 import { generateSeedData } from './seed/generate.js';
 
 // Every table, so the seed always starts from an empty database.
@@ -45,9 +47,10 @@ async function main(): Promise<void> {
     adapter: new PrismaPg({ connectionString }),
   });
   try {
-    const data = generateSeedData({ now: new Date() });
+    const now = new Date();
+    const data = generateSeedData({ now });
 
-    await prisma.$transaction(
+    const scored = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRawUnsafe(
           `TRUNCATE TABLE ${ALL_TABLES.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`,
@@ -70,6 +73,12 @@ async function main(): Promise<void> {
             `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), (SELECT MAX(id) FROM "${table}"))`,
           );
         }
+
+        return computeAndStoreScores(
+          tx,
+          data.bins.map((b) => b.id),
+          { trigger: 'SEED', now },
+        );
       },
       { timeout: 60_000 },
     );
@@ -82,7 +91,7 @@ async function main(): Promise<void> {
       `Seeded ${data.bins.length} bins, ${data.products.length} products, ` +
         `${data.pallets.length} pallets (${data.palletItems.length} lines), ` +
         `${data.movements.length} movements, ${data.auditResults.length} audits ` +
-        `(${failed} failed, ${audited} bins audited).`,
+        `(${failed} failed, ${audited} bins audited). Scored ${scored} bins.`,
     );
   } finally {
     await prisma.$disconnect();
