@@ -1,4 +1,5 @@
 import type { WarehouseLayoutResponse } from '@rivbins/shared';
+import { BinDrawer } from '@/components/bin-detail/BinDrawer';
 import { Heatmap } from '@/components/heatmap/Heatmap';
 import { Legend } from '@/components/heatmap/Legend';
 import { RecomputeButton } from '@/components/heatmap/RecomputeButton';
@@ -50,6 +51,8 @@ export default async function HeatmapPage(props: PageProps<'/'>) {
           Could not load the warehouse layout. Check that the API is running and the database is seeded.
         </p>
       )}
+
+      {selectedCode && <BinDrawer code={selectedCode} />}
     </main>
   );
 }
