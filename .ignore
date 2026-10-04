@@ -1,0 +1,3 @@
+# Keep session transcripts out of search tools (ripgrep / Claude Code Grep and Explore).
+# They stay tracked by git; see "Transcript safety" in CLAUDE.md.
+docs/transcripts/

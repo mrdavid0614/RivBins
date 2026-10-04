@@ -17,14 +17,22 @@ results feed back into the next scoring run.
   - Config files should be TypeScript when the tool supports it
     (e.g. `next.config.ts`, the Prisma seed script).
   - `strict: true` in every `tsconfig.json`; avoid `any`.
-- **Frontend:** Next.js
-- **Backend:** NestJS
-- **ORM:** Prisma
-- **Database:** PostgreSQL (run locally via `docker-compose.yml`)
-- **Package manager:** pnpm workspaces, pinned through the `packageManager` field in the
-  root `package.json` (setup: `corepack enable`). No Turborepo/Nx.
-- **Styling:** Tailwind CSS
-- **Testing:** Jest (API), with priority on unit tests for the scoring calculator
+- **Runtime:** Node.js 24 LTS (`.nvmrc` = `24.21.0`, engines `>=24.15`, required by Nest CLI 12)
+- **Frontend:** Next.js 16 (App Router), React 19
+- **Backend:** NestJS 12, as an **ESM** project (`"type": "module"`, relative imports end in `.js`)
+- **ORM:** Prisma 7 (`prisma-client` generator into `apps/api/src/generated/prisma`,
+  `@prisma/adapter-pg`, config in `apps/api/prisma.config.ts`)
+- **Database:** PostgreSQL 17 (run locally via `docker-compose.yml`)
+- **Package manager:** pnpm 10 workspaces, pinned through the `packageManager` field in the
+  root `package.json`. No Turborepo/Nx. Allowed install scripts are listed in
+  `pnpm-workspace.yaml` (`onlyBuiltDependencies`).
+- **Styling:** Tailwind CSS 4
+- **Testing:** Vitest (API), with priority on unit tests for the scoring calculator.
+  Unit tests: `*.spec.ts` next to the code; e2e tests: `apps/api/test/*.e2e-spec.ts`
+  (need the database).
+- **Linting:** oxlint (API), ESLint with `eslint-config-next` (web). Both treat `any` as an
+  error and fail on warnings.
+- **Ports:** web `3000`, API `3001`, Postgres `5432`.
 
 ## Working Agreements
 
@@ -40,6 +48,84 @@ architecture, the tooling, or the process.
   new entry and mark the old one `Superseded by D-XXX`.
 - If the decision changes business rules, update `CLAUDE.md` as well.
 
+### Plan before writing features
+**Always propose a plan before writing a feature, and wait for the user's approval before
+writing any code.** The plan covers:
+
+- **Scope:** what the feature does and what it explicitly leaves out.
+- **Changes:** files/modules to add or modify, data model or migration changes, and API
+  endpoints (method, path, request/response shape).
+- **Business rules:** which rules from this file apply and how they are implemented.
+- **Tests:** what gets unit-tested and what gets e2e-tested.
+- **Branch and commits:** the `feature/*` branch name and the planned commits.
+- **Open questions:** anything that needs a decision first.
+
+If the plan changes significantly during implementation, stop and propose the updated
+plan before continuing. Approved plans and the decisions in them are recorded in
+`DECISIONS.md`.
+
+### Start of every session
+Sessions are cleared between features, so this file is the only context that loads
+automatically. At the start of a session:
+
+1. Read `DECISIONS.md` and the **Roadmap** below to see what's done and what's next.
+   If the `Next` row is the **Release**, don't plan a feature: follow the last-feature
+   exception in "Session transcripts".
+2. If `docs/transcripts/` has an uncommitted transcript from the previous feature, commit
+   it as the first commit of the next feature branch, **right after the plan is approved
+   and the branch is created** (never on `develop`):
+   `docs(transcripts): add <NN-name> session transcript`.
+   Before committing, follow **Transcript safety**.
+
+### Session transcripts (`/export` + `/clear`)
+**Before a feature's PR is reviewed**, its branch must include the Roadmap update: mark
+the feature `Done` and the following one `Next`. That way `develop` is correct as soon as
+the PR is merged.
+
+After every feature is **ready** (its PR passed `/code-review` and is merged into
+`develop`), close the session with a transcript. `/export` and `/clear` are Claude Code
+commands that **only the user can run**, so:
+
+1. **Show a preview** of what the session covered: the feature, the decisions made
+   (`D-XXX`), the PRs and commits, and the review findings. Flag sensitive content
+   following **Transcript safety**.
+2. **Ask for confirmation** before the export.
+3. After the user confirms, give the exact command:
+   `/export docs/transcripts/<NN-name>.txt` (names from the Roadmap, e.g. `01-schema-seed`).
+4. The user runs `/export`, then `/clear`, and starts the next feature in the new session.
+
+Exception, the last feature: the release session creates `release/1.0.0` from `develop`,
+commits transcript 05 there (after **Transcript safety**), and marks the Release row
+`Done`. That branch merges into `main`, gets tagged `v1.0.0`, and is merged back into
+`develop`. The release session itself is not exported.
+
+### Transcript safety (applies to every transcript, including the release)
+- **Never repeat a secret in the conversation.** When reporting a sensitive hit, give only
+  its location and type, with a masked value (e.g. "line 812: Postgres URL with password
+  `post…://riv…:****@…`"). Repeating it would put it into the next transcript.
+- **Never print a committed transcript's contents.** The only command that reads them is
+  the gitleaks scan. Any `git diff`, `git show` or `git log -p` on a branch with
+  transcripts must exclude them: `-- . ':(exclude)docs/transcripts'`. Never open them with
+  Read, and never search them: the root `.ignore` file keeps `docs/transcripts/` out of
+  ripgrep-based search (Grep, Explore agents).
+- **Before `/export`:** in the preview, flag sensitive content the same way (location and
+  type only).
+- **Before committing a transcript:** scan it with gitleaks (default rules plus
+  `url-with-credentials` from `.gitleaks.toml`). Never use `-v`: it prints the text around
+  each finding. Write the report to a temp file and print only line numbers and rule IDs:
+
+  ```bash
+  r=$(mktemp) && gitleaks dir --config .gitleaks.toml --redact --no-banner \
+    --report-format json --report-path "$r" docs/transcripts/<NN-name>.txt; echo "exit: $?"; \
+    python3 -c 'import json,sys; [print(f["StartLine"], f["RuleID"]) for f in json.load(open(sys.argv[1]))]' "$r"; rm -f "$r"
+  ```
+
+  - Report only the line number and rule ID of each finding.
+  - If there are findings, **the user redacts them in their editor**, outside the session.
+    Claude never opens or edits the lines with findings.
+  - Re-run the scan; it must exit `0` (no findings) before the commit. If in doubt, don't
+    commit it: move it out of the repo (e.g. `~/RivBins-transcripts/`).
+
 ### Git workflow
 Use **git-flow** branching and **Conventional Commits** for every commit and PR. The full
 rules are in `.claude/rules/git-workflow.md`.
@@ -49,6 +135,23 @@ rules are in `.claude/rules/git-workflow.md`.
 show the proposed fix to the user and wait for approval before applying it. The full
 process is in `.claude/rules/git-workflow.md`.
 
+## Roadmap
+
+One feature per session, and one transcript per feature row (00–05) in
+`docs/transcripts/`. Each feature normally has one `feature/*` branch and one PR.
+Exceptions: row 00 (setup) spans several PRs, transcript 05 goes on `release/1.0.0`, and
+the Release row (R) has no transcript.
+
+| #  | Feature                                             | Transcript         | Status   |
+|----|-----------------------------------------------------|--------------------|----------|
+| 00 | Project setup: business logic, decisions, scaffold  | `00-project-setup` | Done     |
+| 01 | Seed data (schema already in place)                 | `01-schema-seed`   | Done     |
+| 02 | Scoring service + recompute                         | `02-scoring`       | Done     |
+| 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Next     |
+| 04 | Audit plans + tasks                                 | `04-audit-plans`   | Planned  |
+| 05 | Mobile count flow                                   | `05-count-flow`    | Planned  |
+| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Planned |
+
 ## Project Structure
 
 ```
@@ -57,7 +160,9 @@ RivBins/
 │   ├── api/                  # NestJS — the only app that touches the DB
 │   │   ├── prisma/           # schema.prisma, seed.ts, migrations/
 │   │   └── src/
+│   │       ├── generated/    # Prisma client (generated, git-ignored)
 │   │       ├── prisma/       # PrismaModule + PrismaService
+│   │       ├── health/       # GET /health (API + DB check)
 │   │       ├── warehouse/    # heatmap layout (aisles → racks → bins + current score)
 │   │       ├── bins/         # bin detail, search by code, score history
 │   │       ├── scoring/      # scoring.config.ts, scoring.calculator.ts (pure), service, controller
@@ -84,7 +189,8 @@ RivBins/
 ### Physical hierarchy
 Warehouse → Aisle → Rack → Bin
 
-- The seed has one warehouse with a few aisles and racks and **~30 bins** in total.
+- The seed has one warehouse with 3 aisles, 2 racks per aisle, and **36 bins** in total
+  (2 levels × 3 positions per rack, D-043).
 - Each bin has a unique, human-readable **bin code** (used for search/scan), e.g. `A-01-03`.
 - The heatmap uses this hierarchy for its layout: a grid per aisle and rack.
 
@@ -120,12 +226,18 @@ across bins so the scores spread across green, yellow, and red.
   bins that **do not already have a `PENDING` task**.
 - **AuditTask:** one per bin in a plan. Status is `PENDING` or `DONE`.
   Existing `PENDING` tasks are never modified when a new plan is created.
+  The database enforces **at most one `PENDING` task per bin** (partial unique index
+  `AuditTask_binId_pending_key`, raw SQL in the init migration). The plan service must
+  treat a violation as "bin already has a pending task" and skip it.
 - **AuditResult:** the outcome of counting one bin.
   - Per pallet line: expected qty, counted qty, difference.
   - Bin-level: auto-computed pass/fail (`autoOutcome`), the user's final pass/fail
     (`finalOutcome`, which may be an override), discrepancy ratio, and a timestamp.
   - Linked to its task when there is one. Ad-hoc counts (bin searched without a task)
     are allowed.
+- **Audit results cannot be deleted** while adjustments or score history reference them
+  (`ON DELETE RESTRICT`). Otherwise audit-generated adjustments would silently become
+  "manual" (null `auditResultId`) and inflate factor 3.
 - **BinScore:** an **append-only score history**. Every recompute inserts a new row and
   points `Bin.currentScoreId` at it, in one transaction. Rows are never updated.
 
@@ -154,7 +266,7 @@ be recomputed on its own.
 | 3 | Adjustments since last audit | Manual `ADJUSTMENT` count since last audit                                   | 5 adjustments        | 0.15              |
 | 4 | Audit failure history        | Audits with `finalOutcome = FAIL` in the last 90 days (does **not** reset on audit) | 2 failures    | 0.15              |
 | 5 | Last discrepancy size        | `Σ|counted − expected| / Σ expected` from the last audit (never audited = 0) | 20%                  | 0.15              |
-| 6 | SKU mix                      | Distinct products currently in the bin                                       | 6 SKUs               | 0.10              |
+| 6 | SKU mix                      | Distinct products currently in the bin (lines with quantity > 0)             | 6 SKUs               | 0.10              |
 
 **SKU mix normalization:** `min((distinctSkus − 1) / (threshold − 1), 1)`, so a
 single-SKU bin scores 0 and a bin with 6 or more SKUs scores 1. An empty bin also scores 0.
@@ -231,6 +343,12 @@ The user counts **each product line on each pallet** in the bin.
 3. Update the bin's last audit date.
 4. Mark the bin's `PENDING` task as `DONE`, if one exists.
 5. Recompute that bin's score.
+
+All five steps run in one transaction, and its **first write updates the `Bin` row**
+(`lastAuditedAt`). That locks the bin, so a concurrent "Recompute scores" can't overwrite
+the new `AUDIT` score with one built from pre-audit inputs. The scoring code locks the
+bins it scores in id order (`FOR NO KEY UPDATE`) before reading their inputs and taking
+the score timestamp (D-056, D-057).
 
 ## Features / Screens
 

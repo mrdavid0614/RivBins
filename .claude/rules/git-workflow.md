@@ -58,7 +58,7 @@ Format:
 Use the part of the codebase that changed. Omit the scope when a change spans the repo.
 
 `api`, `web`, `shared`, `db` (Prisma schema/migrations), `seed`, `scoring`, `audits`,
-`audit-plans`, `heatmap`, `count`, `repo`
+`audit-plans`, `heatmap`, `count`, `repo`, `transcripts`
 
 ### Granularity
 - One logical change per commit. Don't mix unrelated changes.
@@ -83,6 +83,10 @@ Use the part of the codebase that changed. Omit the scope when a change spans th
 1. Run `/code-review` against the PR (or the branch diff against its target branch).
    Use level `medium` unless the user asks for another one. Never launch `ultra`; only the
    user can trigger it.
+   **Always exclude `docs/transcripts/`** from the review: say so in the `/code-review`
+   arguments, and use `git diff <target>...HEAD -- . ':(exclude)docs/transcripts'`, where
+   `<target>` is the PR's target branch (`develop` for features, `main` for release/hotfix).
+   Transcripts are checked only by the gitleaks scan.
 2. Report the findings to the user.
 3. **Do not change any code yet.** For each finding that needs a change, show the
    proposed fix (a diff or the exact code change) and explain why.

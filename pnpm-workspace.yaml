@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 blocks dependency install scripts by default; allow only the ones we need.
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - esbuild # tsx (seed runner)
+  - prisma
+
+# Build scripts we don't need (Next.js works without them in development).
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

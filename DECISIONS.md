@@ -128,6 +128,7 @@ All decisions made during development, in chronological order.
 - **Alternatives considered:** A single current score per bin.
 
 ## D-015 — Tooling
+- **Status:** Testing part (Jest) superseded by D-022.
 - **Date:** 2026-10-02
 - **Area:** Tech stack
 - **Decision:** pnpm workspaces (pinned through `packageManager`, set up with
@@ -168,3 +169,401 @@ All decisions made during development, in chronological order.
 - **Area:** Process
 - **Decision:** The remote is `git@github.com:mrdavid0614/RivBins.git`. PRs are opened on
   GitHub. Rule changes also go through a `feature/*` branch and a reviewed PR.
+
+## D-021 — Node.js 24 LTS
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** The project requires Node.js 24 LTS (`.nvmrc` = `24.21.0`, engines
+  `>=24.15`).
+- **Rationale:** Nest CLI 12 requires Node `^22.22.3`, `^24.15.0`, or `>=26`. Node 24 is
+  the current LTS.
+- **Alternatives considered:** Latest Node 22 (maintenance LTS); staying on Node 22.12 and
+  dropping the Nest CLI.
+
+## D-022 — Vitest for API tests
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** Use Vitest instead of Jest for the API. Supersedes the testing part of
+  D-015.
+- **Rationale:** Nest 12 generates ESM projects with Vitest by default. Vitest supports
+  ESM and TypeScript natively, while Jest's ESM support is still experimental.
+- **Alternatives considered:** Jest with extra ESM configuration.
+
+## D-023 — oxlint for the API
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** Keep oxlint (Nest 12's default) for the API. The web app keeps ESLint with
+  `eslint-config-next`.
+- **Alternatives considered:** ESLint with typescript-eslint in both apps.
+
+## D-024 — PostgreSQL 17
+- **Date:** 2026-10-03
+- **Area:** Tech stack
+- **Decision:** Keep PostgreSQL 17 (`postgres:17-alpine`) in `docker-compose.yml`.
+- **Alternatives considered:** PostgreSQL 16 (already available locally).
+
+## D-025 — Review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply all four `/code-review` findings on `feature/monorepo-scaffold`:
+  generate the Prisma client before API typecheck/tests, remove the `db:seed` placeholder
+  until the seed exists, build request headers with `Headers` (JSON content type only for
+  non-FormData bodies), and treat empty API responses as `undefined`.
+
+## D-026 — Second review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Data model
+- **Decision:** Apply all four findings from the second `/code-review`:
+  - Rename the API lint config to `.oxlintrc.json` so oxlint actually loads it.
+  - Run oxlint with `--type-aware` (`oxlint-tsgolint`) so `no-floating-promises` works.
+  - `onDelete: Restrict` on `Movement.auditResultId` and `BinScore.auditResultId`.
+  - Partial unique index: at most one `PENDING` task per bin.
+  - Regenerate the `init` migration instead of adding follow-up migrations (the user
+    explicitly consented to resetting the local database).
+
+## D-027 — Third review fixes for the monorepo scaffold
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the third `/code-review`:
+  - `prisma.config.ts` only declares the datasource when `DATABASE_URL` is set, so
+    `prisma generate` (and therefore build, typecheck, and unit tests) works without a
+    `.env` file, e.g. in CI.
+  - `apiFetch` defaults `Content-Type: application/json` only for string bodies.
+
+## D-028 — Plan before writing features
+- **Date:** 2026-10-03
+- **Area:** Process
+- **Decision:** Before writing any feature, propose a plan (scope, changes, business
+  rules, tests, branch/commits, open questions) and wait for approval before writing
+  code. Significant changes to an approved plan are proposed again before continuing.
+  Documented in `CLAUDE.md` under Working Agreements.
+
+## D-029 — Session transcripts and roadmap
+- **Status:** Amended by D-030 to D-041 (roadmap timing, commit timing, release
+  transcript, declined transcripts, secret scanning and redaction).
+- **Date:** 2026-10-03
+- **Area:** Process
+- **Decision:**
+  - After every feature is ready (PR reviewed and merged into `develop`), the session is
+    exported with `/export` and cleared with `/clear`. Both are run by the user.
+  - Before the export, Claude shows a **preview** of what the session covered (no extra
+    summary file), flags anything sensitive, and asks for confirmation.
+  - Transcripts are saved in `docs/transcripts/` and committed with the next feature's
+    branch, named `NN-name` (`00-project-setup`, `01-schema-seed`, `02-scoring`, ...).
+  - This setup session is exported as `00-project-setup`.
+  - `CLAUDE.md` gets a Roadmap (feature, transcript name, status) and a start-of-session
+    checklist, since only `CLAUDE.md` loads automatically after `/clear`.
+- **Alternatives considered:** An approved summary file next to each export; keeping
+  transcripts outside the repo; folding this session into `01-schema-seed`.
+
+## D-030 — Roadmap update happens before the feature's review
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** A feature's branch updates the Roadmap (feature `Done`, next one `Next`)
+  before its PR is reviewed and merged, instead of after the export. Fixes a `/code-review`
+  finding: after the merge, the update would need a direct commit to `develop`.
+
+## D-031 — Transcript commit timing, final transcript, and commit scope
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the three findings from the second `/code-review` of the transcript
+  workflow:
+  - The previous transcript is committed right after the next feature's plan is approved
+    and its branch is created, never on `develop`.
+  - The last feature's transcript goes on `release/1.0.0`, which merges into `main`
+    (tagged `v1.0.0`) and back into `develop`. The release session is not exported.
+  - `transcripts` is added to the allowed Conventional Commit scopes.
+
+## D-032 — Secret scan before committing transcripts
+- **Status:** Amended by D-034 and D-037.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the three findings from the third `/code-review` of the transcript
+  workflow:
+  - Before a transcript is committed, scan it for secrets, show the findings, and redact
+    with the user's approval (or don't commit it).
+  - Mark D-029 as amended by D-031.
+  - Correct the Roadmap intro: row 00 spans several PRs, and the last transcript goes on
+    `release/1.0.0`.
+
+## D-033 — Declined transcripts and the release row
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the fourth `/code-review` of the transcript
+  workflow:
+  - A transcript that isn't committed (possible secrets) is moved out of the repo, e.g.
+    to `~/RivBins-transcripts/`.
+  - The Roadmap gets a Release row after feature 05, and the start-of-session checklist
+    says to follow the release exception when that row is `Next`.
+
+## D-034 — Single "Transcript safety" rule
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Replace the scattered secret-handling steps with one **Transcript safety**
+  rule in `CLAUDE.md` that both the feature path and the release path reference:
+  - Never repeat a secret in the conversation; report only location, type, and a masked
+    value.
+  - Flag sensitive content that way in the export preview.
+  - Scan, then redact with approval (or move out of the repo) before committing any
+    transcript, including transcript 05 on `release/1.0.0`.
+  - The release session marks the Release row `Done`.
+- **Rationale:** Fixes the fifth `/code-review` findings. Showing secrets while flagging
+  them would copy them into the next transcript.
+
+## D-035 — Scan and redact transcripts without printing secrets
+- **Status:** Superseded by D-037.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the sixth `/code-review` of the transcript
+  workflow:
+  - Scan transcripts with commands that print only line numbers and pattern types, redact
+    with in-place `sed` shape patterns, and never open hit lines with Read or Edit.
+  - Correct the Roadmap intro: transcripts exist for feature rows 00–05 only, transcript
+    05 goes on `release/1.0.0`, and the Release row has none.
+
+## D-036 — Portable redaction command and complete amendment marks
+- **Status:** Redaction part superseded by D-037.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the seventh `/code-review` of the transcript
+  workflow:
+  - Use the macOS-safe form `sed -E -i '' '…' file` (no backup file), verify with a
+    count of unmasked hits that must be `0`, and check `git status` for stray backups.
+    Tested on a temporary file with a fake secret.
+  - Mark D-029 as amended by every later decision that changed it.
+
+## D-037 — Scan transcripts with gitleaks; the user redacts
+- **Status:** Amended by D-038, D-040, and D-041.
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Tooling
+- **Decision:** Replace the hand-written `grep`/`sed` secret rules with **gitleaks**
+  (installed with Homebrew, 8.30.1):
+  - Scan with `gitleaks dir --config .gitleaks.toml --redact`. `.gitleaks.toml` extends
+    the default rules with `url-with-credentials`, since the defaults miss connection
+    strings with passwords.
+  - Report only line numbers and rule IDs. The user redacts findings in their own editor,
+    outside the session, and the re-scan must exit `0` before the commit.
+- **Rationale:** Fixes the eighth `/code-review` findings. The hand-written patterns only
+  covered Postgres URLs and missed passwords containing `@`. Tested on a temporary file
+  with a fake GitHub token, a private key, and a URL with an `@` in the password: all
+  three were found, and no value appeared in the output.
+- **Alternatives considered:** Extending the `grep`/`sed` patterns per secret type.
+
+## D-038 — Tighter `url-with-credentials` rule
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Tooling
+- **Decision:** Apply both findings from the ninth `/code-review`:
+  - The username is optional, so `redis://:<password>@host` is detected.
+  - The password stops at `/` (it can still contain `@`), so text like
+    `http://localhost:3000/docs ... "@nestjs/core"` is no longer flagged.
+  - Allowlist the local docker-compose URL (`rivbins:rivbins@localhost`), already public
+    in `apps/api/.env.example`.
+- **Rationale:** Tested 8 cases with gitleaks 8.30.1. A token, a private key, a password
+  containing `@`, and a URL with no username were detected; the npm-scope URLs, the
+  health URL, and the dev URL were not. No values appeared in the output.
+- **Known limit:** a password with a literal `/` (normally URL-encoded as `%2F`) is not
+  detected.
+
+## D-039 — Transcripts never enter the conversation through git
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the tenth `/code-review`:
+  - Committed transcripts are never printed. Every `git diff`/`git show`/`git log -p` on a
+    branch with transcripts excludes `docs/transcripts/`, and `/code-review` always
+    excludes it too. Otherwise each review would copy the previous transcript into the
+    session, and transcripts would nest and repeat any missed secret.
+  - Mark D-032 as amended by D-034 and D-037, D-035 as superseded by D-037, and D-036's
+    redaction part as superseded by D-037.
+
+## D-040 — Non-verbose transcript scan, review diff against the PR target, merge
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply both findings from the eleventh `/code-review`:
+  - Scan transcripts without `-v` (it prints the text around findings). Write a JSON
+    report to a temp file and print only line numbers and rule IDs. Tested: exit 1 with
+    findings, 0 when clean, and no surrounding text printed.
+  - The review diff uses the PR's target branch (`develop` or `main`), not always
+    `develop`.
+  - The user asked to apply everything required to merge `feature/session-transcripts`
+    after this round.
+
+## D-041 — Keep transcripts out of search tools
+- **Date:** 2026-10-03
+- **Area:** Process / Code review
+- **Decision:** Apply the findings from the final `/code-review` before merging
+  `feature/session-transcripts` (the user pre-authorized the fixes needed to merge):
+  - Add a root `.ignore` with `docs/transcripts/`, so ripgrep-based search (Grep, Explore
+    agents) never returns transcript lines. The "never print transcripts" rule now also
+    covers Read and search tools.
+  - Mark D-037 as amended by D-038, D-040, and D-041.
+
+## D-042 — Feature 01 plan: deterministic seed data
+- **Date:** 2026-10-03
+- **Area:** Seed / Process
+- **Decision:** Approve the plan for feature 01 (`feature/seed-data`):
+  - A pure, deterministic generator (`generateSeedData(now, seed)`, mulberry32 PRNG)
+    simulates the last 30 days forward in time, so movements, pallet locations, and
+    quantities are consistent by construction. A thin runner persists the rows.
+  - Bins get a risk profile (`cold` / `warm` / `hot`) that drives uneven activity.
+  - The seed doesn't compute scores: `SEED` scores are added in feature 02, once the
+    calculator exists. It creates no audit plans or tasks.
+  - Run with `tsx` (Node's type stripping doesn't rewrite the generated client's `.js`
+    imports), wired as Prisma's seed command and as `pnpm db:seed`.
+- **Alternatives considered:** Generating a final state and its movements separately.
+
+## D-043 — 36-bin warehouse layout
+- **Date:** 2026-10-03
+- **Area:** Seed / Domain model
+- **Decision:** The seed creates 36 bins: 3 aisles (A–C) × 2 racks × 2 levels ×
+  3 positions, coded `A-01-01` to `C-02-06`.
+- **Alternatives considered:** 30 bins with 5-position racks on a single level.
+
+## D-044 — The seed includes past audits
+- **Date:** 2026-10-03
+- **Area:** Seed / Scoring
+- **Decision:** Some bins get ad-hoc past audits (PASS and FAIL, `finalOutcome =
+  autoOutcome`, audit-generated adjustments on FAIL per D-004), so factors 1, 4, and 5
+  vary and some bins score green.
+- **Rationale:** Without audits every bin gets ≥25 points from factor 1 and 0 from
+  factors 4 and 5.
+
+## D-045 — No seed e2e test
+- **Date:** 2026-10-03
+- **Area:** Testing
+- **Decision:** The seed is covered by unit tests on the pure generator plus a manual
+  `pnpm db:seed` run. No e2e test, because it would wipe the local database.
+
+## D-046 — The seed wipes existing data
+- **Date:** 2026-10-03
+- **Area:** Seed
+- **Decision:** The seed truncates all tables (`RESTART IDENTITY CASCADE`) before
+  inserting, so it can be rerun without `prisma migrate reset`.
+
+## D-047 — The user redacts transcript findings manually
+- **Date:** 2026-10-03
+- **Area:** Process / Transcript safety
+- **Decision:** For the `00-project-setup` transcript, the user redacts the remaining
+  `url-with-credentials` findings in their editor, as D-037 requires. A redacted URL
+  keeps no `user:password` part (`scheme://[REDACTED]@host`), because
+  `user:[REDACTED]@host` still matches the rule.
+- **Alternatives considered:** A subagent or a blind `sed` command redacting the lines
+  (rejected: D-037 says Claude never edits flagged lines); moving the transcript out of
+  the repo.
+
+## D-048 — Review fix: generate the Prisma client before seeding
+- **Date:** 2026-10-03
+- **Area:** Process / Code review / Seed
+- **Decision:** Apply the `/code-review` finding on `feature/seed-data`: `db:seed` runs
+  `pnpm db:generate` first, like the other scripts that need the client, so the README's
+  fresh-clone order (install → migrate → seed) works. Verified by deleting the generated
+  client and running `pnpm db:seed`.
+
+## D-049 — Feature 02 plan: scoring service and recompute
+- **Date:** 2026-10-04
+- **Area:** Scoring / Process
+- **Decision:** Approve the plan for feature 02 (`feature/scoring-service`):
+  - `scoring.config.ts` holds the factors, thresholds, weights, and the 90-day failure
+    window. `scoring.calculator.ts` is a pure function with unit tests.
+  - `loadScoringInputs(db, binIds, now)` reads the inputs for many bins in batched
+    queries and accepts a Prisma client or a transaction, so the service and the seed
+    runner share it.
+  - `ScoringService.recomputeAll(trigger)` and `recomputeBin(binId, trigger,
+    auditResultId?, tx?)` insert `BinScore` rows and repoint `Bin.currentScoreId` in one
+    transaction, with one `now` per run. Feature 05 calls `recomputeBin` with `AUDIT`.
+  - `POST /scoring/recompute` recomputes all bins.
+  - The seed runner stores a `SEED` score for every bin (completes D-042).
+  - Read endpoints for scores and history are left to feature 03.
+  - Tests: calculator and service unit tests, plus a recompute e2e test that only
+    appends rows.
+
+## D-050 — Final scoring thresholds and weights
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Keep the proposed values: time since last audit 30 days / 0.25,
+  activity 60 movements / 0.20, manual adjustments 5 / 0.15, failures in 90 days 2 /
+  0.15, last discrepancy 20% / 0.15, SKU mix 6 SKUs / 0.10.
+
+## D-051 — Fractional days and display rounding
+- **Status:** Amended by D-054.
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 1 uses fractional days. The stored `rawValue`, `normalized`, and
+  `points` are rounded to 2 decimals for display, while the score is rounded from the
+  unrounded sum.
+- **Rationale:** Whole days would make scores jump at midnight.
+- **Alternatives considered:** Whole days.
+
+## D-052 — Discrepancy stored as a ratio
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 5's raw value and threshold are ratios (`0.12`, `0.2`). The UI
+  formats them as percentages.
+
+## D-053 — Recompute endpoint returns a summary
+- **Date:** 2026-10-04
+- **Area:** API
+- **Decision:** `POST /scoring/recompute` returns `{ trigger, binsRecomputed,
+  computedAt }`. The heatmap refetches its own data afterwards.
+- **Alternatives considered:** Returning every new score.
+
+## D-054 — Discrepancy ratio keeps 4 decimals
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 5's stored `rawValue` is rounded to 4 decimals (a percentage with
+  2), not 2. Other raw values, `normalized`, and `points` keep 2 decimals (D-051).
+- **Rationale:** With 2 decimals a ratio of `0.0993` showed as `0.1` while its points
+  (7.45) came from the exact value, so the breakdown didn't add up.
+
+## D-055 — SKU mix counts only lines with stock
+- **Date:** 2026-10-04
+- **Area:** Scoring
+- **Decision:** Factor 6 counts distinct products on pallet lines with `quantity > 0`. A
+  line counted down to 0 holds no product.
+
+## D-056 — Recompute locks bins before reading inputs
+- **Status:** Amended by D-057.
+- **Date:** 2026-10-04
+- **Area:** Scoring / Code review
+- **Decision:** Apply the `/code-review` finding on PR #8: every score computation runs
+  `SELECT … FOR UPDATE` on its bins, in id order, before loading inputs. The count flow
+  (feature 05) must update the `Bin` row first in its transaction, which takes the same
+  lock.
+- **Rationale:** Without the lock, a manual recompute that read a bin's inputs before a
+  concurrent count committed would repoint `currentScoreId` at a score built from
+  pre-audit inputs. A new e2e test reproduces the race: it fails without the lock and
+  passes with it. Id order avoids deadlocks between concurrent recomputes.
+- **Alternatives considered:** A conditional pointer update based on `computedAt`;
+  serializable isolation with retries.
+
+## D-057 — Score timestamp after the lock; `FOR NO KEY UPDATE`
+- **Date:** 2026-10-04
+- **Area:** Scoring / Code review
+- **Decision:** Apply both findings from the second `/code-review` of PR #8:
+  - `computeAndStoreScores` takes `now` after the bin lock and returns it. Otherwise a
+    count committed while the recompute waited (`countedAt` later than `now`) was left
+    out of factors 4 and 5. The e2e race test now also saves a failed audit while the
+    recompute waits; it fails with the old timestamp and passes with the fix.
+  - Lock with `FOR NO KEY UPDATE` instead of `FOR UPDATE`. It still conflicts with the
+    count flow's `UPDATE "Bin"`, but inserts that reference a bin (movements, tasks,
+    audits) no longer wait or deadlock. Checked against Postgres: a movement insert is
+    blocked by `FOR UPDATE` and not by `FOR NO KEY UPDATE`; the bin update is blocked
+    by both.
+
+## D-058 — Race test cleans up after a failed assertion
+- **Date:** 2026-10-04
+- **Area:** Testing / Code review
+- **Decision:** Apply the third `/code-review` finding on PR #8: the e2e race test waits
+  for its simulated count to finish before cleanup, so the FAIL audit it creates is
+  always deleted. Verified by forcing an early assertion failure: the seeded database
+  kept exactly its 28 audits. The third review found no issues in the production code.
+
+## D-059 — Interim release 0.2.0
+- **Date:** 2026-10-04
+- **Area:** Process / Git workflow
+- **Decision:** Bring `develop` into `main` after feature 02 through an interim git-flow
+  release, `release/0.2.0` (scoring service, seed data, and scaffold), instead of a
+  direct `develop` → `main` PR. The release bumps every package to `0.2.0`. After the PR
+  merges, `main` is tagged `v0.2.0` and `release/0.2.0` is merged back into `develop`.
+  The Release row (`v1.0.0`) stays planned after feature 05.
+- **Alternatives considered:** A direct `develop` → `main` PR as a one-time exception to
+  the git-flow rule; waiting for `v1.0.0`.
