@@ -556,3 +556,14 @@ All decisions made during development, in chronological order.
   for its simulated count to finish before cleanup, so the FAIL audit it creates is
   always deleted. Verified by forcing an early assertion failure: the seeded database
   kept exactly its 28 audits. The third review found no issues in the production code.
+
+## D-059 — Interim release 0.2.0
+- **Date:** 2026-10-04
+- **Area:** Process / Git workflow
+- **Decision:** Bring `develop` into `main` after feature 02 through an interim git-flow
+  release, `release/0.2.0` (scoring service, seed data, and scaffold), instead of a
+  direct `develop` → `main` PR. The release bumps every package to `0.2.0`. After the PR
+  merges, `main` is tagged `v0.2.0` and `release/0.2.0` is merged back into `develop`.
+  The Release row (`v1.0.0`) stays planned after feature 05.
+- **Alternatives considered:** A direct `develop` → `main` PR as a one-time exception to
+  the git-flow rule; waiting for `v1.0.0`.

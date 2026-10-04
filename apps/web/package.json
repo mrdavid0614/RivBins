@@ -1,6 +1,6 @@
 {
   "name": "@rivbins/web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Smart Cycle Count Scoring — Next.js web app",
   "private": true,
   "type": "module",
