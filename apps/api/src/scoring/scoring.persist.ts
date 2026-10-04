@@ -24,6 +24,13 @@ export async function computeAndStoreScores(
     throw new Error('auditResultId is required for, and only for, AUDIT scores');
   }
 
+  // Lock the bins (in id order, to avoid deadlocks) before reading inputs. A
+  // concurrent count then either finishes first, and we read its committed
+  // changes, or waits for us. Without this, a full recompute could repoint
+  // currentScoreId at a score built from pre-audit inputs (D-056).
+  await tx.$queryRaw`
+    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id FOR UPDATE`;
+
   const inputs = await loadScoringInputs(tx, binIds, now);
 
   for (const [binId, binInputs] of inputs) {

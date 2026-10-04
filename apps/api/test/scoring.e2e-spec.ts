@@ -61,4 +61,62 @@ describe('Scoring (e2e)', () => {
       expect(Math.abs(points - (current?.score ?? 0))).toBeLessThan(1);
     }
   });
+
+  it('waits for a concurrent count and scores the counted state', async () => {
+    const bin = await prisma.bin.findFirstOrThrow({
+      where: { lastAuditedAt: null },
+      orderBy: { id: 'asc' },
+      select: { id: true, lastAuditedAt: true },
+    });
+
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let locked = (): void => {};
+    const lockTaken = new Promise<void>((resolve) => (locked = resolve));
+
+    try {
+      // Stands in for the count flow: it updates the bin first (D-056), which
+      // locks the row, and commits only when the gate opens.
+      const count = prisma.$transaction(async (tx) => {
+        await tx.bin.update({
+          where: { id: bin.id },
+          data: { lastAuditedAt: new Date() },
+        });
+        locked();
+        await gate;
+      });
+      await lockTaken;
+
+      let finished = false;
+      const recompute = request(app.getHttpServer())
+        .post('/scoring/recompute')
+        .then((res) => {
+          finished = true;
+          return res;
+        });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(finished).toBe(false); // blocked on the bin lock
+
+      release();
+      await count;
+      expect((await recompute).status).toBe(201);
+
+      const current = await prisma.bin.findUniqueOrThrow({
+        where: { id: bin.id },
+        include: { currentScore: true },
+      });
+      const factors = current.currentScore?.factors as unknown as FactorBreakdown[];
+      const days = factors.find((f) => f.key === 'timeSinceLastAudit')?.rawValue;
+      expect(days).toBe(0); // the committed audit date, not "never audited"
+    } finally {
+      release();
+      // Put the seeded state back and refresh its score.
+      await prisma.bin.update({
+        where: { id: bin.id },
+        data: { lastAuditedAt: bin.lastAuditedAt },
+      });
+      await request(app.getHttpServer()).post('/scoring/recompute').expect(201);
+    }
+  });
 });

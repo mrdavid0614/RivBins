@@ -7,6 +7,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 function createTx() {
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     bin: {
       findMany: vi.fn(),
       update: vi.fn().mockResolvedValue({}),
@@ -124,6 +125,22 @@ describe('ScoringService', () => {
         where: { id: 7 },
         data: { currentScoreId: 1007 },
       });
+    });
+
+    it('locks the bin row before reading its inputs', async () => {
+      await service.recomputeBin(7, 'AUDIT', 42);
+
+      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+      const [sql, ids] = tx.$queryRaw.mock.calls[0] as [TemplateStringsArray, number[]];
+      expect(sql.join('?')).toMatch(/ORDER BY id FOR UPDATE/);
+      expect(ids).toEqual([7]);
+      const lockOrder = tx.$queryRaw.mock.invocationCallOrder[0] ?? Infinity;
+      expect(lockOrder).toBeLessThan(
+        tx.movement.findMany.mock.invocationCallOrder[0] ?? -Infinity,
+      );
+      expect(lockOrder).toBeLessThan(
+        tx.bin.findMany.mock.invocationCallOrder[0] ?? -Infinity,
+      );
     });
 
     it("reuses the caller's transaction", async () => {
