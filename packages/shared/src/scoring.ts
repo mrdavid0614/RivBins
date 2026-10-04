@@ -19,3 +19,11 @@ export interface FactorBreakdown {
   /** Contribution to the 0–100 score: normalized × weight × 100 */
   points: number;
 }
+
+/** Response of POST /scoring/recompute (D-053). */
+export interface RecomputeScoresResponse {
+  trigger: 'MANUAL_RECOMPUTE';
+  binsRecomputed: number;
+  /** ISO 8601 timestamp shared by every score row of this run. */
+  computedAt: string;
+}
