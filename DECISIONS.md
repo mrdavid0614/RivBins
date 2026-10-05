@@ -787,3 +787,14 @@ All decisions made during development, in chronological order.
   400. Before, a larger value passed `ParseIntPipe`, made Prisma throw, and returned a
   500. The fix lands on `release/1.0.0` and reaches `develop` through the back-merge.
 - **Alternatives considered:** Accepting the finding as is.
+
+## D-081 — Second review fix for release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Web / Code review
+- **Decision:** Apply the low-severity finding from the second `/code-review` of PR #14:
+  the tasks page ignores a `?plan=` id above 2,147,483,647, like any other invalid value,
+  instead of sending it to the API and showing "Could not load audit plans". The limit
+  is a local constant in the web app that points to `MAX_PLAN_ID` in the API, because it
+  comes from the INT4 column type, not from a business rule (unlike D-078).
+- **Alternatives considered:** Treating a 400 from the tasks call as "no rows"; moving the
+  constant to `packages/shared`; accepting the finding.
