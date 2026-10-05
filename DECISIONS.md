@@ -567,3 +567,234 @@ All decisions made during development, in chronological order.
   The Release row (`v1.0.0`) stays planned after feature 05.
 - **Alternatives considered:** A direct `develop` → `main` PR as a one-time exception to
   the git-flow rule; waiting for `v1.0.0`.
+
+## D-060 — Feature 03 plan: heatmap dashboard and bin detail
+- **Date:** 2026-10-04
+- **Area:** Heatmap / API / Process
+- **Decision:** Approve the plan for feature 03 (`feature/heatmap-dashboard`):
+  - `GET /warehouse/layout` returns aisles → racks → bins with each bin's current score.
+  - `GET /bins/:code` returns the bin detail (location, last audit, current score with
+    its factor breakdown, pallets and lines). `GET /bins/:code/scores?limit=` returns
+    the score history, newest first.
+  - Contract types live in `@rivbins/shared`; the API maps Prisma rows with pure,
+    unit-tested mappers; e2e tests run against the seeded database.
+  - The web page stays a server component; "Recompute scores" is a server action that
+    calls `POST /scoring/recompute` and revalidates the page.
+  - Out of scope: bin search/count flow (05), pending-task badges (04), live updates.
+
+## D-061 — Heatmap color bands
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** Three fixed bands: 0–39 green (low), 40–69 yellow (medium), 70–100 red
+  (high). Bins with no score are gray. A legend shows the bands.
+- **Alternatives considered:** A continuous green → red gradient.
+
+## D-062 — Bins are addressed by code in the API
+- **Date:** 2026-10-04
+- **Area:** API
+- **Decision:** Bin detail and history use the human-readable code
+  (`/bins/A-01-03`), so feature 05's search/scan can reuse the same endpoint.
+- **Alternatives considered:** The numeric id.
+
+## D-063 — Score history defaults to the last 20 rows
+- **Date:** 2026-10-04
+- **Area:** API / Heatmap
+- **Decision:** `GET /bins/:code/scores` returns the newest 20 rows by default, with an
+  optional `limit` (1–100). Every recompute appends a row per bin, so the full history
+  grows without bound.
+- **Alternatives considered:** Always returning the full history.
+
+## D-064 — Server-rendered bin drawer
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** The bin detail drawer opens from the `?bin=<code>` search parameter and
+  is rendered on the server. The URL is shareable and the API stays server-side only.
+- **Alternatives considered:** A client drawer fetching the API directly (needs CORS
+  and a public API URL).
+
+## D-065 — The drawer hides pallet lines with quantity 0
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** The bin detail lists only pallet lines with `quantity > 0`, matching
+  factor 6 (D-055): a line counted down to 0 holds no product.
+- **Alternatives considered:** Showing them dimmed.
+
+## D-066 — Implementation adjustments in feature 03
+- **Date:** 2026-10-04
+- **Area:** Heatmap
+- **Decision:** Two small changes to the approved plan (D-060), made during
+  implementation:
+  - The recompute server action calls `refresh()` from `next/cache` instead of
+    `revalidatePath('/')`. The heatmap is a dynamic page (`no-store` fetches,
+    `searchParams`), and Next 16 documents `refresh()` for refreshing the current page
+    after a Server Action.
+  - The drawer's score history collapses consecutive rows with the same score and
+    trigger into one line ("Manual recompute ×12", with a time range). Audit rows are
+    never merged. The API still returns every row (D-063); only the presentation
+    changes, so the timeline shows the changes instead of 20 identical rows.
+
+## D-067 — Feature 04 plan: audit plans and tasks
+- **Date:** 2026-10-05
+- **Area:** Audit plans / API / Process
+- **Decision:** Approve the plan for feature 04 (`feature/audit-plans`):
+  - `POST /audit-plans { n }` creates a plan from the top N bins by current score
+    (ties by bin code), skipping bins with a `PENDING` task (D-006) and bins with no
+    score. It runs in one transaction under a Postgres advisory lock, so concurrent
+    plans never pick the same bins, and inserts tasks with `skipDuplicates`, so a
+    violation of `AuditTask_binId_pending_key` is skipped as "already pending".
+    `scoreAtCreation` snapshots the score.
+  - `GET /audit-plans` lists plan summaries; `GET /audit-tasks?status=&planId=&limit=`
+    lists task rows (newest plan first, then rank).
+  - The selection is a pure, unit-tested function; e2e tests run against the seeded
+    database and clean up their plans and tasks.
+  - Web: a `/tasks` page with the N input, a "Generate audit plan" server action and a
+    tasks table filterable by status; a nav header links Heatmap and Tasks.
+  - Pending-task badges (deferred by D-060) are included: heatmap cells and the bin
+    drawer show a bin's `PENDING` task.
+  - Out of scope: completing tasks (feature 05), cancelling/deleting tasks or plans,
+    pagination, recomputing scores before planning.
+
+## D-068 — No eligible bins returns 409
+- **Date:** 2026-10-05
+- **Area:** Audit plans / API
+- **Decision:** When no bin is eligible (every scored bin already has a `PENDING`
+  task), `POST /audit-plans` returns `409 Conflict` and creates no plan.
+- **Rationale:** Keeps the plan list free of empty plans.
+- **Alternatives considered:** Creating an empty plan.
+
+## D-069 — N is capped at the number of eligible bins
+- **Date:** 2026-10-05
+- **Area:** Audit plans / API
+- **Decision:** N must be an integer from 1 to the number of eligible bins (scored bins
+  without a `PENDING` task). A larger N returns `400` and creates no plan, so a plan
+  always holds exactly N tasks. `GET /audit-plans/eligibility` returns
+  `{ eligibleBins }` so the form can show the limit and set the input's maximum. The
+  count is checked inside the plan transaction, under the advisory lock.
+- **Alternatives considered:** A fixed 1–100 range that creates fewer than N tasks
+  when not enough bins are eligible (the original proposal).
+
+## D-070 — Implementation adjustments in feature 04
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Web
+- **Decision:** Small changes to the approved plan (D-067), made during implementation:
+  - The plan creation and listing endpoints ship in one commit instead of two.
+  - The tasks table also filters by plan (`/tasks?plan=3`): plan numbers in the table and
+    the drawer's pending-task line link to it.
+  - `apiFetch` throws the API's error `message`, so the form shows why a plan was
+    rejected (N above the eligible bins, or none eligible).
+
+## D-071 — Review fixes for feature 04
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Code review
+- **Decision:** Apply both low-severity findings from the `/code-review` of PR #12:
+  - `GET /audit-tasks` rejects a repeated `status` parameter (an array) with `400`
+    instead of failing with `500`.
+  - The tasks page asks for an explicit limit of 100 rows and says so when the list is
+    cut off ("Showing the 100 most recent tasks"), instead of silently hiding older tasks.
+- **Alternatives considered:** Pagination for the tasks table (out of scope per D-067).
+
+## D-072 — Feature 05 plan: mobile count flow
+- **Date:** 2026-10-05
+- **Area:** Count flow / API / Process
+- **Decision:** Approve the plan for feature 05 (`feature/count-flow`):
+  - `GET /bins/:code/count-sheet` returns the bin's expected pallets and lines (with
+    pallet item ids), its pending task, and the tolerance.
+  - `POST /bins/:code/counts { lines: [{ palletItemId, expectedQty, countedQty }],
+    finalOutcome }` saves the count in one transaction: update `Bin.lastAuditedAt`
+    first (bin lock, D-056/D-057), validate the lines, store the `AuditResult` and its
+    lines (linked to the pending task, if any), create audit-generated adjustments and
+    correct quantities when the final outcome is FAIL, mark the task `DONE`, and
+    recompute the bin with the `AUDIT` trigger. Returns the result with the previous
+    and new score.
+  - `count.config.ts` holds the tolerance (`toleranceUnits: 0`, D-002);
+    `evaluateCount` is a pure, unit-tested function.
+  - Web: `/count` (code input + pending tasks) and `/count/[binCode]` (per-line inputs,
+    live auto outcome, override, save, result panel); "Count" links in the nav, bin
+    drawer, and tasks table.
+  - E2e tests run against the seeded database and restore it afterwards.
+  - Out of scope: camera scanning, unexpected products, editing/deleting results,
+    offline mode, multi-bin counts.
+
+## D-073 — The count sheet skips lines with quantity 0
+- **Date:** 2026-10-05
+- **Area:** Count flow
+- **Decision:** Only pallet lines with `quantity > 0` are counted, matching D-055 and
+  D-065.
+- **Alternatives considered:** Showing them so the counter can report found stock.
+
+## D-074 — Bin codes are typed or scanned with a keyboard scanner
+- **Date:** 2026-10-05
+- **Area:** Count flow / Web
+- **Decision:** The search is a text input, which also works with hardware scanners
+  that type the code. No camera scanning.
+- **Alternatives considered:** Camera scanning with `BarcodeDetector` (unsupported in
+  Safari).
+
+## D-075 — A stale count sheet is rejected with 409
+- **Date:** 2026-10-05
+- **Area:** Count flow / API
+- **Decision:** The submission carries each line's `expectedQty`. If the bin's lines or
+  quantities changed since the sheet was loaded, the API returns `409` and the counter
+  reloads the sheet, so the saved auto outcome is the one the counter saw.
+- **Alternatives considered:** Saving against the current quantities.
+
+## D-076 — Empty bins can be counted
+- **Date:** 2026-10-05
+- **Area:** Count flow
+- **Decision:** A bin with no lines can be counted; it passes automatically with a
+  discrepancy of 0, confirming the bin is empty.
+- **Alternatives considered:** Refusing the count.
+
+## D-077 — Implementation adjustments in feature 05
+- **Date:** 2026-10-05
+- **Area:** Count flow / Testing
+- **Decision:** Small changes to the approved plan (D-072), made during implementation:
+  - The count sheet also returns the bin's last audit date and current score, so the
+    count page can show them without a second request.
+  - The 409 for a stale sheet names the line by SKU and pallet ("SKU-1010 on
+    PLT-0072") instead of its internal id.
+  - E2e test files run one at a time (`fileParallelism: false`): they share the seeded
+    database, and the count tests create a pending task that would change the audit-plan
+    eligibility count checked by another file.
+  - The API commits are split by layer (pure rules, then endpoints) rather than "sheet,
+    then save".
+
+## D-078 — Review fix for feature 05
+- **Date:** 2026-10-05
+- **Area:** Count flow / Code review
+- **Decision:** Apply the low-severity finding from the `/code-review` of PR #13: the
+  count sheet returns `maxCountedQty` from `count.config.ts`, and the count page treats
+  a larger value as not counted yet. The line shows "At most 1,000,000 units", and Save
+  stays disabled. Before, the form accepted up to 9,999,999, and the API rejected the
+  save with a 400 naming an array index instead of the product.
+- **Alternatives considered:** A hard-coded limit in the web app.
+
+## D-079 — Release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Process / Git workflow
+- **Decision:** With features 00–05 merged into `develop`, cut `release/1.0.0` from
+  `develop`, following the last-feature exception (D-032, D-033). The branch commits
+  transcript 05 (gitleaks scan: no findings), bumps every package to `1.0.0`, and marks
+  the Release row `Done`. After `/code-review` and the PR into `main`, `main` is tagged
+  `v1.0.0` and `release/1.0.0` is merged back into `develop`. The release session is not
+  exported.
+
+## D-080 — Review fix for release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Code review
+- **Decision:** Apply the low-severity finding from the `/code-review` of PR #14:
+  `GET /audit-tasks` rejects a `planId` outside 1–2,147,483,647 (the INT4 range) with a
+  400. Before, a larger value passed `ParseIntPipe`, made Prisma throw, and returned a
+  500. The fix lands on `release/1.0.0` and reaches `develop` through the back-merge.
+- **Alternatives considered:** Accepting the finding as is.
+
+## D-081 — Second review fix for release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Web / Code review
+- **Decision:** Apply the low-severity finding from the second `/code-review` of PR #14:
+  the tasks page ignores a `?plan=` id above 2,147,483,647, like any other invalid value,
+  instead of sending it to the API and showing "Could not load audit plans". The limit
+  is a local constant in the web app that points to `MAX_PLAN_ID` in the API, because it
+  comes from the INT4 column type, not from a business rule (unlike D-078).
+- **Alternatives considered:** Treating a 400 from the tasks call as "no rows"; moving the
+  constant to `packages/shared`; accepting the finding.

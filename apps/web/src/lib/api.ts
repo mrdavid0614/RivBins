@@ -24,11 +24,30 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     headers,
   });
 
-  if (!response.ok) {
-    throw new ApiError(response.status, `${init?.method ?? 'GET'} ${path} failed with ${response.status}`);
-  }
-
   // 204 / empty body (e.g. action endpoints) → undefined
   const body = await response.text();
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      errorMessage(body) ?? `${init?.method ?? 'GET'} ${path} failed with ${response.status}`,
+    );
+  }
+
   return (body ? JSON.parse(body) : undefined) as T;
+}
+
+/** The `message` of a NestJS error body (`{ statusCode, message, error }`), if any. */
+function errorMessage(body: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (typeof parsed === 'object' && parsed !== null && 'message' in parsed) {
+      const { message } = parsed;
+      if (typeof message === 'string') return message;
+      if (Array.isArray(message)) return message.join('; ');
+    }
+  } catch {
+    // Not JSON: fall back to the generic message.
+  }
+  return null;
 }

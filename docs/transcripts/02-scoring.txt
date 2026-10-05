@@ -1,0 +1,2099 @@
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Opus 5.5 · Claude Pro
+ ▝▝   ▝▝   ~/Desktop/projects/RivBins
+
+
+❯ /clear                                                                        
+
+❯ start the feature 02-scoring                                                  
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+⏺ Session context loaded. Feature 01 is Done, 02 (Scoring service + recompute)
+  is Next, and docs/transcripts/01-schema-seed.txt is uncommitted, so it becomes
+  the first commit on the new branch once you approve the plan.
+
+  Plan: Feature 02, scoring service + recompute
+
+  Scope
+
+  In scope:
+  - The scoring config and a pure calculator.
+  - A loader that reads each bin's scoring inputs from the database.
+  - A service that recomputes all bins or one bin.
+  - A POST endpoint for the manual recompute.
+  - SEED scores written at the end of pnpm db:seed.
+  - The README's Scoring section.
+
+  Left out:
+  - Read endpoints for scores, history and the heatmap layout. They go in 03.
+  - The automatic AUDIT recompute is only exposed as recomputeBin(binId, 
+    'AUDIT', auditResultId, tx). Feature 05 calls it when it saves a count.
+  - No UI work.
+
+  Changes
+
+  File: apps/api/src/scoring/scoring.config.ts
+  Purpose: The single source of truth: 6 factors (key, label, threshold,
+  weight),
+  FAILURE_WINDOW_DAYS = 90, and a check that the weights sum to 1.
+  ────────────────────────────────────────
+  File: scoring.calculator.ts (+ .spec.ts)
+  Purpose: A pure function: calculateScore(inputs, now, config) → { score, 
+  factors: FactorBreakdown[] }. No database access.
+  ────────────────────────────────────────
+  File: scoring.inputs.ts
+  Purpose: loadScoringInputs(db, binIds, now) takes any Prisma client or
+  transaction. It batches the queries (bins, movements since each bin's last
+  audit, FAIL audits in the last 90 days, the last audit result, distinct SKUs)
+   so it never runs one query per bin. It's shared by the service and the seed
+  runner.
+  ────────────────────────────────────────
+  File: scoring.service.ts
+  Purpose: recomputeAll(trigger) and recomputeBin(binId, trigger, 
+  auditResultId?,
+   tx?). In one transaction, it inserts BinScore rows and sets
+  Bin.currentScoreId. One now is used for the whole run and becomes computedAt.
+  ────────────────────────────────────────
+  File: scoring.controller.ts, scoring.module.ts, app.module.ts
+  Purpose: The endpoint and module wiring.
+  ────────────────────────────────────────
+  File: packages/shared/src/scoring.ts
+  Purpose: Adds RecomputeScoresResponse.
+  ────────────────────────────────────────
+  File: apps/api/prisma/seed.ts
+  Purpose: After the insert, computes and stores the SEED score for every bin in
+
+  the same transaction. This finishes the deferral from D-042.
+  ────────────────────────────────────────
+  File: README.md, CLAUDE.md, DECISIONS.md
+  Purpose: Scoring docs, Roadmap update, and decision entries.
+
+  Endpoint: POST /scoring/recompute takes no body. It returns 201 { trigger: 
+  'MANUAL_RECOMPUTE', binsRecomputed: 36, computedAt }.
+
+  No schema or migration changes.
+
+  Business rules and how each is implemented
+
+  - Window: movements with occurredAt > lastAuditedAt count toward the score. A
+    never-audited bin uses its full history.
+  - Factor 1: (now − lastAuditedAt) in days. A never-audited bin gets the
+    threshold (30), which normalizes to 1.
+  - Factor 2: PICK + PUTAWAY + MOVE, counting a move whether the bin is binId or
+    fromBinId (D-012).
+  - Factor 3: ADJUSTMENT movements with auditResultId IS NULL only.
+  - Factor 4: audits with finalOutcome = FAIL and countedAt ≥ now − 90d. Not
+    reset by an audit (D-013).
+  - Factor 5: discrepancyRatio of the latest AuditResult, ignoring any override.
+    A never-audited bin gets 0.
+  - Factor 6: min((skus − 1) / 5, 1). An empty bin gets 0.
+  - Score: round(Σ normalized × weight × 100). Each history row stores the
+    threshold and weight it used (D-014). Rows are append-only.
+
+  Tests
+
+  - Calculator unit tests (priority):
+    - Each factor at 0, mid-range and capped.
+    - A never-audited bin.
+    - The SKU mix edge cases (0, 1, 6 and more SKUs).
+    - The weights sum to 1.
+    - A score always within 0–100.
+    - A bin with every factor at max scores 100.
+    - The breakdown's points add up to the score, within rounding.
+    - Each feedback-loop case: a passed audit drops the score, and a failed
+      audit keeps the bin risky.
+  - Service unit test (mocked Prisma): inserts rows and repoints currentScoreId
+    in one transaction, and carries the right trigger and auditResultId.
+  - e2e (test/scoring.e2e-spec.ts): against a seeded database, POST 
+    /scoring/recompute gives every bin a new MANUAL_RECOMPUTE current score with
+    6 factors, and keeps earlier rows. It only appends rows and wipes nothing,
+    so it doesn't run into D-045's concern.
+
+  Branch and commits (feature/scoring-service)
+
+  1. docs(transcripts): add 01-schema-seed session transcript (after the
+     gitleaks scan exits 0)
+  2. feat(scoring): add scoring config and pure calculator
+  3. feat(scoring): load bin scoring inputs from the database
+  4. feat(scoring): add recompute service and endpoint
+  5. feat(seed): compute initial seed scores
+  6. test(scoring): add recompute e2e test
+  7. docs(repo): document the scoring model in the README
+  8. docs(repo): record scoring decisions and mark 02-scoring done
+
+  Open questions (my recommendation first)
+
+  1. Thresholds and weights: finalize the proposed values unchanged (30d/0.25,
+     60/0.20, 5/0.15, 2/0.15, 20%/0.15, 6/0.10)? Recommend: yes.
+  2. Precision of factor 1: use fractional days for the math, and round the
+     stored rawValue and points to 2 decimals for display. The score itself is
+     rounded from the unrounded sum. Recommend: yes (the alternative is whole
+     days, which makes scores jump at midnight).
+  3. Factor 5 units: store the raw value as a ratio (0.12, threshold 0.2) and
+     let the UI format it as a percentage. Recommend: ratio.
+  4. Response of POST /scoring/recompute: return the summary only, and the
+     heatmap refetches its layout (feature 03). Recommend: summary only.
+
+  Approve the plan, or tell me what to change. Once you approve, I'll record the
+  decisions, create the branch, scan and commit the transcript, and start
+  implementing.
+
+✻ Worked for 48s · done Saturday 1:02 PM
+
+※ recap: I'm starting feature 02 (scoring service and recompute) and have proposed a plan with four open questions. Next, I need your approval or changes before I create the branch, commit the transcript and start coding.
+
+❯ approved, go with your recommendations                                        
+
+⏺ Your organization has disabled Claude subscription access for Claude 
+  Code · Use an Anthropic API key instead, or ask your admin to enable 
+  access
+
+✻ Brewed for 1s · done 12:15 AM
+
+❯ approved, go with your recommendations                                        
+  ⎿  1 skill available
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Found 7 url-with-credentials findings in the transcript (lines 1023, 1024,
+  1051, 1058, 1121, 1158) that need redaction to scheme://[REDACTED]@host per
+  D-037/D-047. I'll start writing code now but hold all commits until the
+  re-scan is clean, keeping the transcript as the first commit, and I'm
+  recording these decisions now.
+
+⏺ Bash(cat >> DECISIONS.md <<'EOF'…)
+  ⎿  // Pure seed data generator: no database access (D-042).
+     //
+     // Simulates the last 30 days of warehouse activity forward in time, s
+     … +145 lines (ctrl+o to expand)
+  ⎿  Updated DECISIONS.md (+47 -0)
+      457    `pnpm db:generate` first, like the other scripts that need t
+           he client, so the README's
+      458    fresh-clone order (install → migrate → seed) works. Verified
+            by deleting the generated
+      459    client and running `pnpm db:seed`.
+      460 +                                                              
+      461 +## D-049 — Feature 02 plan: scoring service and recompute     
+      462 +- **Date:** 2026-10-04                                        
+      463 +- **Area:** Scoring / Process                                 
+      464 +- **Decision:** Approve the plan for feature 02 (`feature/scor
+          +ing-service`):                                                
+      465 +  - `scoring.config.ts` holds the factors, thresholds, weights
+          +, and the 90-day failure                                      
+      466 +    window. `scoring.calculator.ts` is a pure function with un
+          +it tests.                                                     
+      467 +  - `loadScoringInputs(db, binIds, now)` reads the inputs for 
+          +many bins in batched                                          
+      468 +    queries and accepts a Prisma client or a transaction, so t
+          +he service and the seed                                       
+      469 +    runner share it.                                          
+      470 +  - `ScoringService.recomputeAll(trigger)` and `recomputeBin(b
+          +inId, trigger,                                                
+      471 +    auditResultId?, tx?)` insert `BinScore` rows and repoint `
+          +Bin.currentScoreId` in one                                    
+      472 +    transaction, with one `now` per run. Feature 05 calls `rec
+          +omputeBin` with `AUDIT`.                                      
+      473 +  - `POST /scoring/recompute` recomputes all bins.            
+      474 +  - The seed runner stores a `SEED` score for every bin (compl
+          +etes D-042).                                                  
+      475 +  - Read endpoints for scores and history are left to feature 
+          +03.                                                           
+      476 +  - Tests: calculator and service unit tests, plus a recompute
+          + e2e test that only                                           
+      477 +    appends rows.                                             
+      478 +                                                              
+      479 +## D-050 — Final scoring thresholds and weights               
+      480 +- **Date:** 2026-10-04                                        
+      481 +- **Area:** Scoring                                           
+      482 +- **Decision:** Keep the proposed values: time since last audi
+          +t 30 days / 0.25,                                             
+      483 +  activity 60 movements / 0.20, manual adjustments 5 / 0.15, f
+          +ailures in 90 days 2 /                                        
+      484 +  0.15, last discrepancy 20% / 0.15, SKU mix 6 SKUs / 0.10.   
+      485 +                                                              
+      486 +## D-051 — Fractional days and display rounding               
+      487 +- **Date:** 2026-10-04                                        
+      488 +- **Area:** Scoring                                           
+      489 +- **Decision:** Factor 1 uses fractional days. The stored `raw
+          +Value`, `normalized`, and                                     
+      490 +  `points` are rounded to 2 decimals for display, while the sc
+          +ore is rounded from the                                       
+      491 +  unrounded sum.                                              
+      492 +- **Rationale:** Whole days would make scores jump at midnight
+          +.                                                             
+      493 +- **Alternatives considered:** Whole days.                    
+      494 +                                                              
+      495 +## D-052 — Discrepancy stored as a ratio                      
+      496 +- **Date:** 2026-10-04                                        
+     … 10 more lines (ctrl+o to expand)
+
+  Searched for 1 pattern, listed 1 directory (ctrl+o to expand)
+
+⏺ Now the shared type, the config, and the calculator.
+
+⏺ Bash(cat >> packages/shared/src/scoring.ts <<'EOF'…)
+  ⎿  export type ScoringFactorKey =
+  ⎿  Updated packages/shared/src/scoring.ts (+8 -0)
+      19    /** Contribution to the 0–100 score: normalized × weight × 10
+          0 */
+      20    points: number;
+      21  }
+      22 +                                                               
+      23 +/** Response of POST /scoring/recompute (D-053). */            
+      24 +export interface RecomputeScoresResponse {                     
+      25 +  trigger: 'MANUAL_RECOMPUTE';                                 
+      26 +  binsRecomputed: number;                                      
+      27 +  /** ISO 8601 timestamp shared by every score row of this run.
+         + */                                                            
+      28 +  computedAt: string;                                          
+      29 +}                                                              
+
+⏺ Write(apps/api/src/scoring/scoring.config.ts)
+  ⎿  Wrote 87 lines to apps/api/src/scoring/scoring.config.ts
+       1 // Single source of truth for the scoring model (CLAUDE.md "Scor
+         ing System", D-050).
+       2 // Every BinScore row stores the threshold and weight it used, s
+       3 // values never makes old scores unexplainable.
+       4 import type { ScoringFactorKey } from '@rivbins/shared';
+       5 
+       6 export interface FactorConfig {
+       8   threshold: number;
+       9   /** 0–1; all weights sum to 1 */
+      10   weight: number;
+     … +82 lines (ctrl+o to expand)
+
+⏺ Write(apps/api/src/scoring/scoring.calculator.ts)
+  ⎿  Wrote 86 lines to apps/api/src/scoring/scoring.calculator.ts
+       1 // Pure scoring calculator: inputs → score + per-factor breakdow
+       2 // Rules: CLAUDE.md "Scoring System"; rounding: D-051.
+       3 import type { FactorBreakdown, ScoringFactorKey } from '@rivbins
+         /shared';
+          './scoring.config.js';
+       5 
+       7 
+       8 /** Everything the calculator needs about one bin, already filte
+         red by the loader. */
+      10   /** null = never audited */
+     … +88 lines (ctrl+o to expand)
+
+⏺ Write(apps/api/src/scoring/scoring.calculator.spec.ts)
+  ⎿  Wrote 265 lines to apps/api/src/scoring/scoring.calculator.spec.ts
+       1 import type { ScoringFactorKey } from '@rivbins/shared';
+       2 import { calculateScore, type ScoringInputs } from './scoring.ca
+         lculator.js';
+       3 import {
+       4   assertValidConfig,
+       6   SCORING_CONFIG,
+       7   type ScoringConfig,
+       8 } from './scoring.config.js';
+       9 
+      10 const NOW = new Date('2026-10-04T12:00:00Z');
+     … +287 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/api &&
+      python3 - <<'EOF'
+      p='src/scoring/scoring.calculator.spec.ts'…)
+  ⎿   WARN  Issue while reading "/Users/raymonddavidmoramontero/.npmrc". Fa
+     iled to replace env in config: ${GCP_PROJECT_ID}
+      WARN  Issue while reading "/Users/raymonddavidmoramontero/.npmrc". Fa
+     … +10 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/src/scoring/scoring.calculator.spec.ts (+5 -4)
+      191  
+      192    describe('combination', () => {
+      193      it('rounds the unrounded sum of contributions', () => {
+      194 -      // 1/3 of each threshold for factors 2 and 4 → 6.666… + 
+          -5 = 11.666… → 12                                              
+      194 +      // 20/60 × 20 = 6.666… plus 1/5 × 15 = 3 → 9.666… → 10  
+      195        const result = calculateScore(
+      196 -        { ...quietBin, activityCount: 20, recentFailureCount: 
+          -2 / 3 },                                                      
+      196 +        { ...quietBin, activityCount: 20, manualAdjustmentCoun
+          +t: 1 },                                                       
+      197          NOW,
+      198        );
+      199 -      expect(result.score).toBe(12);                          
+      199 +      expect(result.factors.map((f) => f.points)).toContain(6.
+          +67);                                                          
+      200 +      expect(result.score).toBe(10);                          
+      201      });
+      202  
+      203      it('keeps the displayed points within rounding of the scor
+           e', () => {
+     ...
+      259      it('keeps a badly failed bin risky right after the count',
+            () => {
+      260        const passed = calculateScore(justAudited(0, 0), NOW).sc
+           ore;
+      261        const failed = calculateScore(justAudited(0.25, 1), NOW)
+           .score;
+      261 -      expect(failed).toBe(6 + 7.5 + 15 - 0.5); // 28 (27.5 rou
+          -nds half up)                                                  
+      262 +      expect(failed).toBe(29); // 6 (SKUs) + 7.5 (1 failure) +
+          + 15 (25% off) = 28.5                                          
+      263        expect(failed).toBeGreaterThan(passed + 20);
+      264      });
+      265    });
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Write(apps/api/src/scoring/scoring.inputs.ts)
+  ⎿  Wrote 125 lines to apps/api/src/scoring/scoring.inputs.ts
+       1 // Loads the calculator inputs for a set of bins with a fixed nu
+       2 // (not one per bin). Accepts the Prisma client or a transaction
+          client, so the
+       3 // service, the seed runner, and (later) the audit flow can shar
+       4 import type { Prisma } from '../generated/prisma/client.js';
+       5 import type { ScoringInputs } from './scoring.calculator.js';
+         nfig.js';
+       7 
+       8 export type ScoringDb = Prisma.TransactionClient;
+      10 const DAY_MS = 24 * 60 * 60 * 1000;
+     … +135 lines (ctrl+o to expand)
+
+⏺ The calculator is written and its 30 unit tests pass. The input loader is done
+  too, and I'm now writing the recompute service and its endpoint.
+
+⏺ Write(apps/api/src/scoring/scoring.persist.ts)
+  ⎿  Wrote 49 lines to apps/api/src/scoring/scoring.persist.ts
+       1 // Computes and stores scores for a set of bins: one new BinScor
+       2 // Bin.currentScoreId pointing at it (append-only history, D-014
+         ). Run it inside a
+       3 // transaction so the history row and the pointer change togethe
+       4 import type { ScoreTrigger } from '@rivbins/shared';
+       5 import type { Prisma } from '../generated/prisma/client.js';
+       7 import { loadScoringInputs, type ScoringDb } from './scoring.inp
+         uts.js';
+       8 
+      10   trigger: ScoreTrigger;
+     … +45 lines (ctrl+o to expand)
+
+⏺ Write(apps/api/src/scoring/scoring.service.ts)
+  ⎿  Wrote 56 lines to apps/api/src/scoring/scoring.service.ts
+       1 import { Injectable, NotFoundException } from '@nestjs/common';
+       2 import type { RecomputeScoresResponse, ScoreTrigger } from '@riv
+         bins/shared';
+       3 import { PrismaService } from '../prisma/prisma.service.js';
+       4 import type { ScoringDb } from './scoring.inputs.js';
+       6 
+       7 const TX_TIMEOUT_MS = 30_000;
+       8 
+       9 @Injectable()
+      10 export class ScoringService {
+     … +52 lines (ctrl+o to expand)
+
+⏺ Write(apps/api/src/scoring/scoring.controller.ts)
+  ⎿  Wrote 14 lines to apps/api/src/scoring/scoring.controller.ts
+       1 import { Controller, Post } from '@nestjs/common';
+       2 import type { RecomputeScoresResponse } from '@rivbins/shared';
+       3 import { ScoringService } from './scoring.service.js';
+       4 
+       5 @Controller('scoring')
+       6 export class ScoringController {
+       7   constructor(private readonly scoring: ScoringService) {}
+       8 
+       9   /** Recomputes every bin's score (D-005, D-053). */
+      10   @Post('recompute')
+     … +4 lines (ctrl+o to expand)
+⏺ Bash(cat > src/scoring/scoring.module.ts <<'EOF'
+      import { Module } from '@nestjs/common';…)
+  ⎿  import { Module } from '@nestjs/common';
+     import { ConfigModule } from '@nestjs/config';
+     import { HealthModule } from './health/health.module.js';
+     … +23 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/src/app.module.ts (+2 -1)
+       2  import { ConfigModule } from '@nestjs/config';
+       3  import { HealthModule } from './health/health.module.js';
+       4  import { PrismaModule } from './prisma/prisma.module.js';
+       5 +import { ScoringModule } from './scoring/scoring.module.js';   
+       6  
+       7  @Module({
+       7 -  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaMod
+         -ule, HealthModule],                                            
+       8 +  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaMod
+         +ule, HealthModule, ScoringModule],                             
+       9  })
+      10  export class AppModule {}
+  ⎿  Created apps/api/src/scoring/scoring.module.ts (+10 -0)
+       1 +import { Module } from '@nestjs/common';                       
+       2 +import { ScoringController } from './scoring.controller.js';   
+       3 +import { ScoringService } from './scoring.service.js';         
+       4 +                                                               
+       5 +@Module({                                                      
+       6 +  controllers: [ScoringController],                            
+       7 +  providers: [ScoringService],                                 
+       8 +  exports: [ScoringService],                                   
+       9 +})                                                             
+      10 +export class ScoringModule {}                                  
+
+⏺ Typecheck is clean. Now the service unit test, with Prisma mocked.
+
+⏺ Write(apps/api/src/scoring/scoring.service.spec.ts)
+  ⎿  Wrote 148 lines to apps/api/src/scoring/scoring.service.spec.ts
+       1 import { NotFoundException } from '@nestjs/common';
+       2 import { Test } from '@nestjs/testing';
+       3 import { PrismaService } from '../prisma/prisma.service.js';
+       4 import { ScoringService } from './scoring.service.js';
+       5 
+       6 const DAY_MS = 24 * 60 * 60 * 1000;
+       7 
+       8 function createTx() {
+       9   return {
+      10     bin: {
+     … +157 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Unit tests (59), typecheck and lint all pass. Next, the seed runner writes
+  SEED scores.
+
+⏺ Bash(python3 - <<'EOF'
+      p='prisma/seed.ts'…)
+  ⎿  diff --git a/apps/api/prisma/seed.ts b/apps/api/prisma/seed.ts
+     index 3bb20a6..baddb9e 100644
+     --- a/apps/api/prisma/seed.ts
+     … +50 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/prisma/seed.ts (+13 -4)
+       1 -// Seed runner: wipes the database and inserts the generated da
+         -ta (D-042, D-046).                                             
+       1 +// Seed runner: wipes the database, inserts the generated data,
+         + and stores the                                                
+       2 +// initial SEED score of every bin (D-042, D-046, D-049).      
+       3  // Run with `pnpm db:seed` (Prisma runs it through tsx, see pri
+          sma.config.ts).
+       4  import 'dotenv/config';
+       5  import { PrismaPg } from '@prisma/adapter-pg';
+       6  import { PrismaClient } from '../src/generated/prisma/client.js
+          ';
+       7 +import { computeAndStoreScores } from '../src/scoring/scoring.p
+         +ersist.js';                                                    
+       8  import { generateSeedData } from './seed/generate.js';
+       9  
+      10  // Every table, so the seed always starts from an empty databas
+          e.
+     ...
+      47      adapter: new PrismaPg({ connectionString }),
+      48    });
+      49    try {
+      48 -    const data = generateSeedData({ now: new Date() });        
+      50 +    const now = new Date();                                    
+      51 +    const data = generateSeedData({ now });                    
+      52  
+      50 -    await prisma.$transaction(                                 
+      53 +    const scored = await prisma.$transaction(                  
+      54        async (tx) => {
+      55          await tx.$executeRawUnsafe(
+      56            `TRUNCATE TABLE ${ALL_TABLES.map((t) => `"${t}"`).joi
+          n(', ')} RESTART IDENTITY CASCADE`,
+     ...
+      73              `SELECT setval(pg_get_serial_sequence('"${table}"',
+           'id'), (SELECT MAX(id) FROM "${table}"))`,
+      74            );
+      75          }
+      76 +                                                               
+      77 +        return computeAndStoreScores(                          
+      78 +          tx,                                                  
+      79 +          data.bins.map((b) => b.id),                          
+      80 +          { trigger: 'SEED', now },                            
+      81 +        );                                                     
+      82        },
+      83        { timeout: 60_000 },
+      84      );
+     ...
+      91        `Seeded ${data.bins.length} bins, ${data.products.length}
+           products, ` +
+      92          `${data.pallets.length} pallets (${data.palletItems.len
+          gth} lines), ` +
+      93          `${data.movements.length} movements, ${data.auditResult
+          s.length} audits ` +
+      85 -        `(${failed} failed, ${audited} bins audited).`,        
+      94 +        `(${failed} failed, ${audited} bins audited). Scored ${
+         +scored} bins.`,                                                
+     … 3 more lines (ctrl+o to expand)
+
+⏺ The database is running. I'm reseeding the local demo data (it's deterministic
+  and can be rerun) and checking how the scores spread.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The scores spread well across the 36 bins: 10 green, 19 yellow and 7 red,
+  using rough cut-offs of 34 and 67. I'll spot-check one bin's breakdown against
+  raw SQL.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The breakdown matches the raw SQL for every factor; I'll flag one rounding
+  quirk later where factor 5's ratio displays as 0.1 but points are computed
+  from the exact 7.45 value. Moving on to the e2e test now.
+
+⏺ Write(apps/api/test/scoring.e2e-spec.ts)
+  ⎿  Wrote 64 lines to apps/api/test/scoring.e2e-spec.ts
+      1 // Requires a seeded database: run `pnpm db:up`, `pnpm db:migrate
+        `, and `pnpm db:seed`.
+      2 // Only appends score rows; it never deletes data.
+      3 import type { Server } from 'node:http';
+      4 import { INestApplication } from '@nestjs/common';
+      6 import type { FactorBreakdown, RecomputeScoresResponse } from '@r
+        ivbins/shared';
+      7 import request from 'supertest';
+      8 import { AppModule } from '../src/app.module.js';
+      9 import { PrismaService } from '../src/prisma/prisma.service.js';
+     … +64 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Everything is green. Next I'll build the API and smoke-test the endpoint on
+  the compiled build.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The build failed, and something on port 3001 returned a 500. Investigating
+  both.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The build failure comes from this shell: it runs Node 22.12, and Nest CLI 12
+  needs Node 24. Port 3001 is also held by an existing process, PID 31989, which
+  I'll identify without touching it.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ That process is already gone. It was my own node dist/main.js serving a stale
+  build, and pkill stopped it. Retrying with Node 24.21.0 from nvm:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ On Node 24 the build passes and POST /scoring/recompute returns 201 with the
+  summary. Now the README.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Bash(python3 - <<'EOF'
+      p='README.md'…)
+  ⎿   DECISIONS.md                   | 47 +++++++++++++++++++++++++++++++++
+     +
+      README.md                      | 57 +++++++++++++++++++++++++++++++++
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated README.md (+54 -3)
+      52  | `pnpm db:up`      | Starts PostgreSQL in Docker              
+                         |
+      53  | `pnpm db:down`    | Stops PostgreSQL                         
+                         |
+      54  | `pnpm db:migrate` | Applies Prisma migrations (and creates ne
+          w ones in development) |
+      55 -| `pnpm db:seed`    | **Wipes the database** and loads the demo
+         - data (see below) |                                            
+      55 +| `pnpm db:seed`    | **Wipes the database**, loads the demo da
+         +ta, and scores every bin (see below) |                         
+      56  
+      57  API end-to-end tests need the database: `pnpm --filter @rivbins
+          /api test:e2e`.
+      58  
+     ...
+       86  
+       87  ## Scoring
+       88  
+       89 -_Documented here once the scoring service is implemented: fact
+          -ors, thresholds, weights,                                     
+       90 -and how they are combined._                                   
+       89 +Every bin gets a **risk score from 0 to 100**: the higher the 
+          +score, the more likely the                                    
+       90 +bin's inventory is wrong, and the sooner it should be counted.
+          + The scores depend only on                                    
+       91 +each bin's own data, so a single bin can be rescored on its ow
+          +n.                                                            
+       92 +                                                              
+       93 +### Factors                                                   
+       94 +                                                              
+       95 +Each factor's raw value is normalized to 0–1 against a **fixed
+          + threshold**:                                                 
+       96 +`normalized = min(raw / threshold, 1)`. "Since last audit" mea
+          +ns movements after the                                        
+       97 +bin's last count, because earlier ones were verified by it. A 
+          +never-audited bin uses its                                    
+       98 +whole history.                                                
+       99 +                                                              
+      100 +| # | Factor | Raw value | Threshold | Weight |               
+      101 +|---|--------|-----------|-----------|--------|               
+      102 +| 1 | Time since last audit | Days since the last count (fract
+          +ional). Never audited = 30 | 30 days | 0.25 |                 
+      103 +| 2 | Activity since last audit | `PICK` + `PUTAWAY` + `MOVE` 
+          +(in or out) movements | 60 movements | 0.20 |                 
+      104 +| 3 | Manual adjustments since last audit | `ADJUSTMENT`s not 
+          +created by an audit | 5 | 0.15 |                              
+      105 +| 4 | Audit failure history | Counts with a final result of FA
+          +IL in the last 90 days (not reset by a count) | 2 failures | 0
+          +.15 |                                                         
+      106 +| 5 | Last discrepancy size | `Σ|counted − expected| / Σ expec
+          +ted` of the last count, ignoring any override. Never audited =
+          + 0 | 0.20 (20%) | 0.15 |                                      
+      107 +| 6 | SKU mix | Distinct products with stock in the bin | 6 SK
+          +Us | 0.10 |                                                   
+      108 +                                                              
+      109 +SKU mix is normalized as `min((skus − 1) / (6 − 1), 1)`, so a 
+          +single-SKU or empty bin                                       
+      110 +scores 0.                                                     
+      111 +                                                              
+      112 +### Combination                                               
+      113 +                                                              
+      114 +```                                                           
+      115 +score = round( Σ normalized_i × weight_i × 100 )              
+     … 29 more lines (ctrl+o to expand)
+
+⏺ Bash(sed -i '' 's/| `Σ|counted − expected| \/ Σ expected` of the last count/|
+      `Σ\\|counted − expected\\| \/ Σ expected` of the last count/' README.md &&
+      grep -n "Σ"…)
+  ⎿  106:| 5 | Last discrepancy size | `Σ\|counted − expected\| / Σ expecte
+     d` of the last count, ignoring any override. Never audited = 0 | 0.20
+     (20%) | 0.15 |
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated README.md (+1 -1)
+      103  | 2 | Activity since last audit | `PICK` + `PUTAWAY` + `MOVE` 
+           (in or out) movements | 60 movements | 0.20 |
+      104  | 3 | Manual adjustments since last audit | `ADJUSTMENT`s not 
+           created by an audit | 5 | 0.15 |
+      105  | 4 | Audit failure history | Counts with a final result of FA
+           IL in the last 90 days (not reset by a count) | 2 failures | 0
+           .15 |
+      106 -| 5 | Last discrepancy size | `Σ|counted − expected| / Σ expec
+          -ted` of the last count, ignoring any override. Never audited =
+          - 0 | 0.20 (20%) | 0.15 |                                      
+      106 +| 5 | Last discrepancy size | `Σ\|counted − expected\| / Σ exp
+          +ected` of the last count, ignoring any override. Never audited
+          + = 0 | 0.20 (20%) | 0.15 |                                    
+      107  | 6 | SKU mix | Distinct products with stock in the bin | 6 SK
+           Us | 0.10 |
+      108  
+      109  SKU mix is normalized as `min((skus − 1) / (6 − 1), 1)`, so a 
+           single-SKU or empty bin
+
+⏺ Bash(sed -i '' -E '149s/\| Next     \|$/| Done     |/; 150s/\| Planned  \|$/|
+      Next     |/' CLAUDE.md && sed -n 147,151p CLAUDE.md)
+  ⎿  | 00 | Project setup: business logic, decisions, scaffold  | `00-proje
+     ct-setup` | Done     |
+     | 01 | Seed data (schema already in place)                 | `01-schem
+     … +7 lines (ctrl+o to expand)
+  ⎿  Updated CLAUDE.md (+2 -2)
+      146  |----|-----------------------------------------------------|--
+           ------------------|----------|
+      147  | 00 | Project setup: business logic, decisions, scaffold  | `
+           00-project-setup` | Done     |
+      148  | 01 | Seed data (schema already in place)                 | `
+           01-schema-seed`   | Done     |
+      149 -| 02 | Scoring service + recompute                         | `
+          -02-scoring`       | Next     |                                
+      150 -| 03 | Heatmap dashboard + bin detail                      | `
+          -03-heatmap`       | Planned  |                                
+      149 +| 02 | Scoring service + recompute                         | `
+          +02-scoring`       | Done     |                                
+      150 +| 03 | Heatmap dashboard + bin detail                      | `
+          +03-heatmap`       | Next     |                                
+      151  | 04 | Audit plans + tasks                                 | `
+           04-audit-plans`   | Planned  |
+      152  | 05 | Mobile count flow                                   | `
+           05-count-flow`    | Planned  |
+      153  | R  | Release 1.0.0: commit transcript 05, merge to `main`, t
+           ag `v1.0.0` | not exported | Planned |
+
+⏺ The implementation is finished. Before any commit, I'm re-scanning the
+  transcript in case you've already redacted it.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ I've built and tested feature 02, the scoring service, but nothing is
+  committed or pushed yet. The previous session's transcript still has to be the
+  branch's first commit, and it still fails the secret scan.
+
+  What you need to do: in docs/transcripts/01-schema-seed.txt, redact the
+  database URLs flagged on lines 1023, 1024 (two on that line), 1051, 1058, 1121
+  and 1158. Use the form scheme://[REDACTED]@host, as in D-047. Then tell me,
+  and I'll re-scan it, commit it first, add the planned commits, push
+  feature/scoring-service and open the PR.
+
+  What's done (uncommitted, on feature/scoring-service):
+  - Scoring code in apps/api/src/scoring/:
+    - scoring.config.ts holds the thresholds and weights you approved and
+      refuses to load if the weights don't add up to 1.
+    - scoring.calculator.ts is the pure calculator.
+    - scoring.inputs.ts reads all bins' data with 5 queries in total, not 5 per
+      bin.
+    - scoring.persist.ts saves a new score row and points the bin at it.
+    - The service, controller and module sit alongside them. The module is
+      registered in app.module.ts.
+  - Endpoint: POST /scoring/recompute returns { trigger, binsRecomputed, 
+    computedAt }.
+  - Seed: pnpm db:seed now also stores a SEED score for every bin.
+  - Docs: the README Scoring section is written, the Roadmap now shows 02 Done
+    and 03 Next, and D-049 to D-053 are recorded.
+
+  Checks:
+  - 59 unit tests pass, 39 of them new: 30 for the calculator and 9 for the
+    service.
+  - The new e2e test passes against the seeded database.
+  - Lint and typecheck pass for the whole repo.
+  - The build passes on Node 24, and POST /scoring/recompute on the built API
+    returned 201 for all 36 bins.
+  - I reseeded the local database. Scores spread across the bins: 10 green, 19
+    yellow, 7 red.
+  - I checked one bin's breakdown (A-01-05) against raw SQL and every factor
+    matched.
+
+  The plain shell here runs Node 22.12, which can't build the API. I used Node
+  24.21.0 from nvm for the build.
+
+  Two points for you to decide:
+  1. Factor 5 display rounding. Rounding to 2 decimals (D-051) turns a raw
+     discrepancy of 0.0993 into 0.1, but its points come from the exact value
+     (7.45 rather than 7.5), so the breakdown looks inconsistent. I recommend
+     keeping 4 decimals for this ratio only, which shows as a percentage with 2
+     decimals (9.93%). Should I make that change?
+  2. SKU mix. I count only products whose pallet line still has quantity
+     above 0. A line counted down to 0 holds no product, so it shouldn't count
+     as a SKU in the bin. Today's seed never leaves a line at 0, so the scores
+     above aren't affected. Do you agree? If so, I'll note it in CLAUDE.md.
+
+✻ Sautéed for 4m 38s · done 12:24 AM
+
+※ recap: Feature 02, the scoring service, is built and tested but not committed yet. Next, you redact the flagged database URLs in the 01-schema-seed transcript so I can re-scan it, commit, and open the PR.
+
+❯ redacted, go with both recommendations                                        
+
+  Ran 1 shell command (ctrl+o to expand)
+⏺ The scan still finds one hit: line 1158, url-with-credentials. The other six
+  are clean. While you fix that line, I'll apply the two changes you approved.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/api &&
+      python3 - <<'EOF'
+      p='src/scoring/scoring.calculator.ts'…)
+  ⎿  2:// Rules: CLAUDE.md "Scoring System"; rounding: D-051.
+     30:const round = (value: number, decimals: number): number =>
+     31:  Math.round(value * 10 ** decimals) / 10 ** decimals;
+     … +7 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/src/scoring/scoring.calculator.spec.ts (+6 -0)
+      174          factor({ lastDiscrepancyRatio: 0.6 }, 'lastDiscrepancy
+           Size').normalized,
+      175        ).toBe(1);
+      176      });
+      177 +                                                              
+      178 +    it('keeps 4 decimals on the ratio so it matches its points
+          +', () => {                                                    
+      179 +      expect(                                                 
+      180 +        factor({ lastDiscrepancyRatio: 0.099303 }, 'lastDiscre
+          +pancySize'),                                                  
+      181 +      ).toMatchObject({ rawValue: 0.0993, normalized: 0.5, poi
+          +nts: 7.45 });                                                 
+      182 +    });                                                       
+      183    });
+      184  
+      185    describe('factor 6: SKU mix', () => {
+  ⎿  Updated apps/api/src/scoring/scoring.calculator.ts (+9 -2)
+      27    factors: FactorBreakdown[];
+      28  }
+      29  
+      30 -const round2 = (value: number): number => Math.round(value * 10
+         -0) / 100;                                                      
+      30 +const round = (value: number, decimals: number): number =>     
+      31 +  Math.round(value * 10 ** decimals) / 10 ** decimals;         
+      32 +const round2 = (value: number): number => round(value, 2);     
+      33 +                                                               
+      34 +/** Ratios keep 4 decimals so they show as a percentage with 2 
+         +(D-054). */                                                    
+      35 +const RAW_DECIMALS: Partial<Record<ScoringFactorKey, number>> =
+         + {                                                             
+      36 +  lastDiscrepancySize: 4,                                      
+      37 +};                                                             
+      38  const clamp01 = (value: number): number => Math.min(Math.max(va
+          lue, 0), 1);
+      39  
+      40  function rawValues(
+     ...
+      79      return {
+      80        key,
+      81        label,
+      75 -      rawValue: round2(raw[key]),                              
+      82 +      rawValue: round(raw[key], RAW_DECIMALS[key] ?? 2),       
+      83        threshold,
+      84        normalized: round2(normalized),
+      85        weight,
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins && python3 -
+      <<'EOF'
+      p='DECISIONS.md'…)
+  ⎿   Test Files  4 passed (4)
+           Tests  60 passed (60)
+     lint 0
+     tsc 0
+  ⎿  Updated CLAUDE.md (+1 -1)
+      266  | 3 | Adjustments since last audit | Manual `ADJUSTMENT` count
+            since last audit                                   | 5 adjust
+           ments        | 0.15              |
+      267  | 4 | Audit failure history        | Audits with `finalOutcome
+            = FAIL` in the last 90 days (does **not** reset on audit) | 2
+            failures    | 0.15              |
+      268  | 5 | Last discrepancy size        | `Σ|counted − expected| / 
+           Σ expected` from the last audit (never audited = 0) | 20%     
+                        | 0.15              |
+      269 -| 6 | SKU mix                      | Distinct products current
+          -ly in the bin                                       | 6 SKUs  
+          -             | 0.10              |                            
+      269 +| 6 | SKU mix                      | Distinct products current
+          +ly in the bin (lines with quantity > 0)             | 6 SKUs  
+          +             | 0.10              |                            
+      270  
+      271  **SKU mix normalization:** `min((distinctSkus − 1) / (threshol
+           d − 1), 1)`, so a
+      272  single-SKU bin scores 0 and a bin with 6 or more SKUs scores 1
+           . An empty bin also scores 0.
+  ⎿  Updated DECISIONS.md (+15 -0)
+      484    0.15, last discrepancy 20% / 0.15, SKU mix 6 SKUs / 0.10.
+      485  
+      486  ## D-051 — Fractional days and display rounding
+      487 +- **Status:** Amended by D-054.                               
+      488  - **Date:** 2026-10-04
+      489  - **Area:** Scoring
+      490  - **Decision:** Factor 1 uses fractional days. The stored `raw
+           Value`, `normalized`, and
+     ...
+      505  - **Decision:** `POST /scoring/recompute` returns `{ trigger, 
+           binsRecomputed,
+      506    computedAt }`. The heatmap refetches its own data afterwards
+           .
+      507  - **Alternatives considered:** Returning every new score.
+      508 +                                                              
+      509 +## D-054 — Discrepancy ratio keeps 4 decimals                 
+      510 +- **Date:** 2026-10-04                                        
+      511 +- **Area:** Scoring                                           
+      512 +- **Decision:** Factor 5's stored `rawValue` is rounded to 4 d
+          +ecimals (a percentage with                                    
+      513 +  2), not 2. Other raw values, `normalized`, and `points` keep
+          + 2 decimals (D-051).                                          
+      514 +- **Rationale:** With 2 decimals a ratio of `0.0993` showed as
+          + `0.1` while its points                                       
+      515 +  (7.45) came from the exact value, so the breakdown didn't ad
+          +d up.                                                         
+      516 +                                                              
+      517 +## D-055 — SKU mix counts only lines with stock               
+      518 +- **Date:** 2026-10-04                                        
+      519 +- **Area:** Scoring                                           
+      520 +- **Decision:** Factor 6 counts distinct products on pallet li
+          +nes with `quantity > 0`. A                                    
+      521 +  line counted down to 0 holds no product.                    
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ I've applied both changes, but I still can't commit because the transcript
+  fails the secret scan on line 1158 (url-with-credentials). The other six
+  findings are clean now.
+
+  On that line, remove the whole user:password part so it reads
+  scheme://[REDACTED]@host. A URL like user:[REDACTED]@host still matches the
+  rule (D-047). When you're done, tell me and I'll scan again.
+
+  The two changes:
+  - Discrepancy rounding: factor 5's raw value now keeps 4 decimals, so 0.0993
+    shows as 9.93% and matches its 7.45 points. Everything else still rounds to
+    2 decimals. I added a unit test for it and recorded it as D-054, marking
+    D-051 as amended.
+  - SKU mix: only products with stock left (quantity above 0) count. I recorded
+    this as D-055 and added it to factor 6 in the CLAUDE.md table. The README
+    already said "with stock", so it didn't need a change.
+
+  All 60 unit tests pass, and lint and typecheck are clean.
+
+  Once the scan passes, I'll commit in this order, push feature/scoring-service,
+  open the PR to develop, and run /code-review at medium with docs/transcripts/
+  excluded:
+  1. docs(transcripts): add 01-schema-seed session transcript
+  2. feat(scoring): add scoring config and pure calculator
+  3. feat(scoring): load bin scoring inputs from the database
+  4. feat(scoring): add recompute service and endpoint
+  5. feat(seed): compute initial seed scores
+  6. test(scoring): add recompute e2e test
+  7. docs(repo): document the scoring model in the README
+  8. docs(repo): record scoring decisions and mark 02-scoring done
+
+✻ Cooked for 32s · done 1:15 AM
+
+❯ fixed line 1158, go ahead                                                     
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The scan exits 0. Committing now.
+
+  Created PR #8, ran 1 shell command (ctrl+o to expand)
+
+⏺ PR #8 is open. Running the mandatory review now.
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ Everything is committed and pushed, and PR #8 is open against develop:
+  https://github.com/mrdavid0614/RivBins/pull/8
+
+  - Transcript: 01-schema-seed passed the secret scan and is the branch's first
+    commit.
+  - Commits: all 8 planned commits are on feature/scoring-service.
+  - Review: /code-review at medium is running now against develop, with
+    docs/transcripts/ left out.
+
+  When it finishes, I'll report the findings and show you the proposed fix for
+  each one. I won't change anything until you approve.
+
+✻ Baked for 33s · done 1:18 AM
+
+⏺ Agent "/code-review medium — review branch feature/scori…" finished · 44s
+
+⏺ The review found one finding (medium).
+
+  apps/api/src/scoring/scoring.service.ts:16: a concurrent manual recompute can 
+  overwrite a fresh AUDIT score.
+
+  Here's the race:
+  1. recomputeAll reads the inputs for all bins. Under Postgres's default
+     isolation level, it sees each bin as it was before any count still in
+     progress.
+  2. While it runs, the count flow saves an audit for bin X and commits its
+     AUDIT score.
+  3. recomputeAll then reaches bin X and points currentScoreId at a
+     MANUAL_RECOMPUTE row built from the inputs it read before the count.
+
+  The heatmap and the next audit plan would then rank that bin as if it had
+  never been counted. Nothing triggers this yet, because the count flow is
+  feature 05. But recomputeBin(…, tx) exists for that flow, so it's best to
+  settle the locking now.
+
+  Proposed fix: lock the bins' rows, in id order, before reading any inputs.
+  Under the default isolation level, every query after the lock sees the latest
+  committed data. A recompute then either waits for an in-progress count to
+  finish and scores the counted state, or makes that count wait until it's done.
+  Locking in id order means two full recomputes can't deadlock each other.
+
+  --- apps/api/src/scoring/scoring.persist.ts
+  +++ apps/api/src/scoring/scoring.persist.ts
+  @@ export async function computeAndStoreScores(
+     if ((trigger === 'AUDIT') !== (auditResultId !== undefined)) {
+       throw new Error('auditResultId is required for, and only for, AUDIT
+  scores');
+     }
+
+  +  // Lock the bins (in id order, to avoid deadlocks) before reading inputs. A
+  +  // concurrent count then either finishes first, and we read its committed
+  +  // changes, or waits for us. Without this, a full recompute could repoint
+  +  // currentScoreId at a score built from pre-audit inputs.
+  +  await tx.$queryRaw`
+  +    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id 
+  FOR UPDATE`;
+  +
+     const inputs = await loadScoringInputs(tx, binIds, now);
+
+  There's also a rule for the count flow in feature 05, which I'd record as a
+  decision. When it saves a count, it must update the Bin row (lastAuditedAt)
+  before any other write in its transaction. Then it locks bin X at the start,
+  the same way a recompute does.
+
+  Tests:
+  - The service unit test checks that the lock query runs before the input
+    queries.
+  - A new e2e test starts a transaction that holds bin X's lock and updates it,
+    and calls POST /scoring/recompute while the lock is held. After the
+    transaction commits, it checks that the bin's new score reflects the update.
+
+  Should I apply this fix? Once it's in, I'll commit it as fix(scoring): lock 
+  bins before recomputing scores and run /code-review again.
+
+✻ Crunched for 1m 32s · done 1:19 AM
+
+❯ Apply it                                                                      
+
+⏺ Update(apps/api/src/scoring/scoring.persist.ts)
+  ⎿  Added 7 lines
+      24      throw new Error('auditResultId is required for, and only fo
+          r, AUDIT scores');
+      25    }
+      26  
+      27 +  // Lock the bins (in id order, to avoid deadlocks) before rea
+         +ding inputs. A                                                 
+      28 +  // concurrent count then either finishes first, and we read i
+         +ts committed                                                   
+      29 +  // changes, or waits for us. Without this, a full recompute c
+         +ould repoint                                                   
+      30 +  // currentScoreId at a score built from pre-audit inputs (D-0
+         +56).                                                           
+      31 +  await tx.$queryRaw`                                          
+      32 +    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) 
+         +ORDER BY id FOR UPDATE`;                                       
+      33 +                                                               
+      34    const inputs = await loadScoringInputs(tx, binIds, now);
+      35  
+      36    for (const [binId, binInputs] of inputs) {
+
+⏺ Now the unit test: add $queryRaw to the transaction mock, and check that the
+  lock runs before the input queries.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/api &&
+      python3 - <<'EOF'
+      p='src/scoring/scoring.service.spec.ts'…)
+  ⎿        Tests  38 passed (38)
+  ⎿  Updated apps/api/src/scoring/scoring.service.spec.ts (+17 -0)
+       7  
+       8  function createTx() {
+       9    return {
+      10 +    $queryRaw: vi.fn().mockResolvedValue([]),                  
+      11      bin: {
+      12        findMany: vi.fn(),
+      13        update: vi.fn().mockResolvedValue({}),
+     ...
+      127        });
+      128      });
+      129  
+      130 +    it('locks the bin row before reading its inputs', async ()
+          + => {                                                         
+      131 +      await service.recomputeBin(7, 'AUDIT', 42);             
+      132 +                                                              
+      133 +      expect(tx.$queryRaw).toHaveBeenCalledTimes(1);          
+      134 +      const [sql, ids] = tx.$queryRaw.mock.calls[0] as [Templa
+          +teStringsArray, number[]];                                    
+      135 +      expect(sql.join('?')).toMatch(/ORDER BY id FOR UPDATE/);
+      136 +      expect(ids).toEqual([7]);                               
+      137 +      const lockOrder = tx.$queryRaw.mock.invocationCallOrder[
+          +0] ?? Infinity;                                               
+      138 +      expect(lockOrder).toBeLessThan(                         
+      139 +        tx.movement.findMany.mock.invocationCallOrder[0] ?? -I
+          +nfinity,                                                      
+      140 +      );                                                      
+      141 +      expect(lockOrder).toBeLessThan(                         
+      142 +        tx.bin.findMany.mock.invocationCallOrder[0] ?? -Infini
+          +ty,                                                           
+      143 +      );                                                      
+      144 +    });                                                       
+      145 +                                                              
+      146      it("reuses the caller's transaction", async () => {
+      147        await service.recomputeBin(7, 'AUDIT', 42, tx as never);
+      148  
+
+⏺ The unit tests pass. Next, the e2e test: a transaction holds one bin's lock
+  while POST /scoring/recompute runs.
+
+⏺ Bash(python3 - <<'EOF'
+      p='test/scoring.e2e-spec.ts'…)
+  ⎿        Tests  3 passed (3)
+  ⎿  Updated apps/api/test/scoring.e2e-spec.ts (+58 -0)
+       61        expect(Math.abs(points - (current?.score ?? 0))).toBeLes
+           sThan(1);
+       62      }
+       63    });
+       64 +                                                              
+       65 +  it('waits for a concurrent count and scores the counted stat
+          +e', async () => {                                             
+       66 +    const bin = await prisma.bin.findFirstOrThrow({           
+       67 +      where: { lastAuditedAt: null },                         
+       68 +      orderBy: { id: 'asc' },                                 
+       69 +      select: { id: true, lastAuditedAt: true },              
+       70 +    });                                                       
+       71 +                                                              
+       72 +    let release = (): void => {};                             
+       73 +    const gate = new Promise<void>((resolve) => (release = res
+          +olve));                                                       
+       74 +    let locked = (): void => {};                              
+       75 +    const lockTaken = new Promise<void>((resolve) => (locked =
+          + resolve));                                                   
+       76 +                                                              
+       77 +    try {                                                     
+       78 +      // Stands in for the count flow: it updates the bin firs
+          +t (D-056), which                                              
+       79 +      // locks the row, and commits only when the gate opens. 
+       80 +      const count = prisma.$transaction(async (tx) => {       
+       81 +        await tx.bin.update({                                 
+       82 +          where: { id: bin.id },                              
+       83 +          data: { lastAuditedAt: new Date() },                
+       84 +        });                                                   
+       85 +        locked();                                             
+       86 +        await gate;                                           
+       87 +      });                                                     
+       88 +      await lockTaken;                                        
+       89 +                                                              
+       90 +      let finished = false;                                   
+       91 +      const recompute = request(app.getHttpServer())          
+       92 +        .post('/scoring/recompute')                           
+       93 +        .then((res) => {                                      
+       94 +          finished = true;                                    
+       95 +          return res;                                         
+       96 +        });                                                   
+       97 +                                                              
+       98 +      await new Promise((resolve) => setTimeout(resolve, 300))
+          +;                                                             
+       99 +      expect(finished).toBe(false); // blocked on the bin lock
+      100 +                                                              
+     … 22 more lines (ctrl+o to expand)
+
+⏺ The e2e suite passes. To check the new test can actually catch the race, I'll
+  run it once with the lock commented out. It should fail.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Confirmed: removing the lock reproduces the race (stale score), while
+  restoring it passes all 61 unit tests, 3 e2e tests, lint, and typecheck. Now
+  I'll document this decision and add the count-flow ordering rule to CLAUDE.md.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Bash(python3 - <<'EOF'
+      p='CLAUDE.md'…)
+  ⎿  27bf225 docs(repo): record the recompute locking decision
+     3dd4e15 fix(scoring): lock bins before recomputing scores
+     b6c50e1 docs(repo): record scoring decisions and mark 02-scoring done
+  ⎿  Updated CLAUDE.md (+5 -0)
+      344  4. Mark the bin's `PENDING` task as `DONE`, if one exists.
+      345  5. Recompute that bin's score.
+      346  
+      347 +All five steps run in one transaction, and its **first write u
+          +pdates the `Bin` row**                                        
+      348 +(`lastAuditedAt`). That locks the bin, so a concurrent "Recomp
+          +ute scores" can't overwrite                                   
+      349 +the new `AUDIT` score with one built from pre-audit inputs. Th
+          +e scoring code locks the                                      
+      350 +bins it scores in id order before reading their inputs (D-056)
+          +.                                                             
+      351 +                                                              
+      352  ## Features / Screens
+      353  
+      354  ### 1. Heatmap Dashboard
+  ⎿  Updated DECISIONS.md (+14 -0)
+      519  - **Area:** Scoring
+      520  - **Decision:** Factor 6 counts distinct products on pallet li
+           nes with `quantity > 0`. A
+      521    line counted down to 0 holds no product.
+      522 +                                                              
+      523 +## D-056 — Recompute locks bins before reading inputs         
+      524 +- **Date:** 2026-10-04                                        
+      525 +- **Area:** Scoring / Code review                             
+      526 +- **Decision:** Apply the `/code-review` finding on PR #8: eve
+          +ry score computation runs                                     
+      527 +  `SELECT … FOR UPDATE` on its bins, in id order, before loadi
+          +ng inputs. The count flow                                     
+      528 +  (feature 05) must update the `Bin` row first in its transact
+          +ion, which takes the same                                     
+      529 +  lock.                                                       
+      530 +- **Rationale:** Without the lock, a manual recompute that rea
+          +d a bin's inputs before a                                     
+      531 +  concurrent count committed would repoint `currentScoreId` at
+          + a score built from                                           
+      532 +  pre-audit inputs. A new e2e test reproduces the race: it fai
+          +ls without the lock and                                       
+      533 +  passes with it. Id order avoids deadlocks between concurrent
+          + recomputes.                                                  
+      534 +- **Alternatives considered:** A conditional pointer update ba
+          +sed on `computedAt`;                                          
+      535 +  serializable isolation with retries.                        
+
+⏺ The fix is pushed. Running the second review.
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ I've applied the fix and pushed it to PR #8. The second /code-review (medium,
+  with docs/transcripts/ left out) is running now.
+
+  - Fix: before reading any inputs, the scoring code now locks the bins it's
+    about to score, in id order. A full recompute therefore waits for a count
+    that's in progress and scores the counted state, or makes that count wait.
+  - Tests: a new unit test checks that the lock runs before the input queries. A
+    new e2e test reproduces the race. With the lock disabled, it fails with
+    expected 30 to be +0: the bin keeps its "never audited" score. With the lock
+    in place, it passes.
+  - Checks: 61 unit tests, 3 e2e tests, lint and typecheck all pass.
+  - Commits:
+    - fix(scoring): lock bins before recomputing scores
+    - docs(repo): record the recompute locking decision
+  - Docs: D-056 is recorded. CLAUDE.md now says the count flow (feature 05) must
+    update the Bin row first in its transaction.
+
+  When the review finishes, I'll report its findings and show you the proposed
+  fix for each one before changing anything.
+
+✻ Brewed for 1m 7s · done 1:20 AM
+⏺ Agent "/code-review medium — re-review branch feature/sc…" finished · 52s
+
+⏺ The second review found 2 findings. It also confirmed that the first fix does
+  close the original race.
+
+  1. Medium: scoring.service.ts:15, now is set before the lock is taken.
+
+  Here's how the race comes back:
+  1. recomputeAll sets now = T0 and then waits for the bin lock.
+  2. A count that starts at T1 (later than T0) updates the bin, inserts a FAIL
+     audit with countedAt = T1, and commits.
+  3. The recompute gets the lock. Its inputs do see the new lastAuditedAt, so
+     factors 1–3 reset. But factors 4 and 5 only include audits with countedAt ≤
+     now, so they leave out the failed count.
+
+  The bin's correct AUDIT score gets replaced by a low score built without the
+  failed count. My e2e test misses this because it only checks factor 1.
+
+  Proposed fix: take the timestamp inside computeAndStoreScores, after the lock,
+  and return it.
+
+  --- apps/api/src/scoring/scoring.persist.ts
+   export interface PersistScoresOptions {
+     trigger: ScoreTrigger;
+     auditResultId?: number;
+  -  /** Shared by every row of the run; becomes BinScore.computedAt. */
+  -  now: Date;
+   }
+  +
+  +export interface PersistScoresResult {
+  +  scored: number;
+  +  /** Taken after the lock; shared by every row of the run 
+  (BinScore.computedAt). */
+  +  computedAt: Date;
+  +}
+
+  -  { trigger, auditResultId, now }: PersistScoresOptions,
+  -): Promise<number> {
+  +  { trigger, auditResultId }: PersistScoresOptions,
+  +): Promise<PersistScoresResult> {
+     …
+     await tx.$queryRaw`… FOR NO KEY UPDATE`;
+  +  // After the lock: audits committed while we waited are not in the future.
+  +  const now = new Date();
+     const inputs = await loadScoringInputs(tx, binIds, now);
+     …
+  -  return inputs.size;
+  +  return { scored: inputs.size, computedAt: now };
+
+  The other changes this needs:
+  - recomputeAll reports the computedAt it gets back.
+  - recomputeBin checks scored.
+  - The seed stops passing now. Its generated dates are all earlier anyway.
+
+  Test: I'd extend the e2e race test. While the recompute is blocked, the count
+  transaction would also insert a FAIL audit for the bin and then commit. The
+  test then checks that factor 4 is 1 and factor 5 shows that audit's ratio,
+  along with factor 1 being 0. It cleans up by deleting that audit, restoring
+  the bin and recomputing. I'll also confirm the test fails with now taken
+  before the lock.
+
+  2. Low: scoring.persist.ts:32, FOR UPDATE is a stronger lock than needed.
+
+  It also blocks every insert of a row that points at a locked bin (movements,
+  pallets, audit results, tasks), for as long as the recompute runs. It can also
+  deadlock with feature 04. Audit-plan creation inserts tasks in score order,
+  not id order, so a plan and a recompute can each end up waiting on a bin the
+  other has locked.
+
+  Proposed fix: use FOR NO KEY UPDATE instead.
+
+  -    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id 
+  FOR UPDATE`;
+  +    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) ORDER BY id 
+  FOR NO KEY UPDATE`;
+
+  This still blocks the count flow, because its first write is an UPDATE "Bin"
+  on columns that aren't keys, and that takes the same lock. Inserts that
+  reference a bin no longer wait. The unit test's pattern changes to FOR NO KEY 
+  UPDATE, and D-056 gets amended by a new D-057.
+
+  Should I apply both fixes? Once they're in, I'll commit them as fix(scoring): 
+  take the score timestamp after the bin lock and fix(scoring): lock bins with 
+  for no key update, then run /code-review again.
+
+✻ Baked for 2m 21s · done 1:21 AM
+
+❯ Apply both fixes                                                              
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ I'll apply them one at a time so each lands in its own commit. First, fix 1:
+  take the timestamp after the lock.
+
+⏺ Bash(python3 - <<'EOF'
+      import re…)
+  ⎿  import { Injectable, NotFoundException } from '@nestjs/common';
+     import type { RecomputeScoresResponse, ScoreTrigger } from '@rivbins/s
+     hared';
+     … +33 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/prisma/seed.ts (+3 -4)
+      47      adapter: new PrismaPg({ connectionString }),
+      48    });
+      49    try {
+      50 -    const now = new Date();                                    
+      51 -    const data = generateSeedData({ now });                    
+      50 +    const data = generateSeedData({ now: new Date() });        
+      51  
+      53 -    const scored = await prisma.$transaction(                  
+      52 +    const { scored } = await prisma.$transaction(              
+      53        async (tx) => {
+      54          await tx.$executeRawUnsafe(
+      55            `TRUNCATE TABLE ${ALL_TABLES.map((t) => `"${t}"`).joi
+          n(', ')} RESTART IDENTITY CASCADE`,
+     ...
+      76          return computeAndStoreScores(
+      77            tx,
+      78            data.bins.map((b) => b.id),
+      80 -          { trigger: 'SEED', now },                            
+      79 +          { trigger: 'SEED' },                                 
+      80          );
+      81        },
+      82        { timeout: 60_000 },
+  ⎿  Updated apps/api/src/scoring/scoring.persist.ts (+13 -6)
+      10    trigger: ScoreTrigger;
+      11    /** Required when trigger = AUDIT. */
+      12    auditResultId?: number;
+      13 -  /** Shared by every row of the run; becomes BinScore.computed
+         -At. */                                                         
+      14 -  now: Date;                                                   
+      13  }
+      14  
+      17 -/** Returns the number of bins scored (bins that don't exist ar
+         -e skipped). */                                                 
+      15 +export interface PersistScoresResult {                         
+      16 +  /** Bins scored (bins that don't exist are skipped). */      
+      17 +  scored: number;                                              
+      18 +  /** Taken after the lock; shared by every row of the run (Bin
+         +Score.computedAt). */                                          
+      19 +  computedAt: Date;                                            
+      20 +}                                                              
+      21 +                                                               
+      22  export async function computeAndStoreScores(
+      23    tx: ScoringDb,
+      24    binIds: readonly number[],
+      21 -  { trigger, auditResultId, now }: PersistScoresOptions,       
+      22 -): Promise<number> {                                           
+      25 +  { trigger, auditResultId }: PersistScoresOptions,            
+      26 +): Promise<PersistScoresResult> {                              
+      27    if ((trigger === 'AUDIT') !== (auditResultId !== undefined)) 
+          {
+      28      throw new Error('auditResultId is required for, and only fo
+          r, AUDIT scores');
+      29    }
+     ...
+      35    await tx.$queryRaw`
+      36      SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) 
+          ORDER BY id FOR UPDATE`;
+      37  
+      38 +  // Only after the lock: a count committed while we waited mus
+         +t not look like it                                             
+      39 +  // happened after `now`, or factors 4 and 5 would leave it ou
+         +t (D-057).                                                     
+      40 +  const now = new Date();                                      
+      41    const inputs = await loadScoringInputs(tx, binIds, now);
+      42  
+      43    for (const [binId, binInputs] of inputs) {
+     ...
+      59      });
+      60    }
+      61  
+      55 -  return inputs.size;                                          
+      62 +  return { scored: inputs.size, computedAt: now };             
+      63  }
+  ⎿  Updated apps/api/src/scoring/scoring.service.ts (+5 -7)
+      12  
+      13    /** Manual "Recompute scores": every bin gets a new MANUAL_RE
+          COMPUTE row (D-005). */
+      14    async recomputeAll(): Promise<RecomputeScoresResponse> {
+      15 -    const now = new Date();                                    
+      16 -    const binsRecomputed = await this.prisma.$transaction(     
+      15 +    const { scored, computedAt } = await this.prisma.$transacti
+         +on(                                                            
+      16        async (tx) => {
+      17          const bins = await tx.bin.findMany({ select: { id: true
+           } });
+      18          return computeAndStoreScores(
+      19            tx,
+      20            bins.map((b) => b.id),
+      22 -          { trigger: 'MANUAL_RECOMPUTE', now },                
+      21 +          { trigger: 'MANUAL_RECOMPUTE' },                     
+      22          );
+      23        },
+      24        { timeout: TX_TIMEOUT_MS },
+      25      );
+      26      return {
+      27        trigger: 'MANUAL_RECOMPUTE',
+      29 -      binsRecomputed,                                          
+      30 -      computedAt: now.toISOString(),                           
+      28 +      binsRecomputed: scored,                                  
+      29 +      computedAt: computedAt.toISOString(),                    
+      30      };
+      31    }
+      32  
+     ...
+      41      tx?: ScoringDb,
+      42    ): Promise<void> {
+      43      const run = async (db: ScoringDb): Promise<void> => {
+      45 -      const scored = await computeAndStoreScores(db, [binId], {
+      44 +      const { scored } = await computeAndStoreScores(db, [binId
+         +], {                                                           
+      45          trigger,
+      46          auditResultId,
+      48 -        now: new Date(),                                       
+      47        });
+      48        if (scored === 0) throw new NotFoundException(`Bin ${binI
+          d} not found`);
+      49      };
+
+⏺ Fix 1 typechecks. Now I'm extending the e2e race test so the blocked count
+  also inserts a failed audit.
+
+⏺ Bash(python3 - <<'EOF'
+      p='test/scoring.e2e-spec.ts'…)
+  ⎿        Tests  3 passed (3)
+           Tests  61 passed (61)
+  ⎿  Updated apps/api/test/scoring.e2e-spec.ts (+25 -4)
+      69        select: { id: true, lastAuditedAt: true },
+      70      });
+      71  
+      72 +    let auditId: number | undefined;                           
+      73      let release = (): void => {};
+      74      const gate = new Promise<void>((resolve) => (release = reso
+          lve));
+      75      let locked = (): void => {};
+     ...
+      77  
+      78      try {
+      79        // Stands in for the count flow: it updates the bin first
+           (D-056), which
+      79 -      // locks the row, and commits only when the gate opens.  
+      80 +      // locks the row. Once the gate opens, after the recomput
+         +e has started and                                              
+      81 +      // is waiting, it saves a failed audit and commits.      
+      82        const count = prisma.$transaction(async (tx) => {
+      83          await tx.bin.update({
+      84            where: { id: bin.id },
+     ...
+       86          });
+       87          locked();
+       88          await gate;
+       89 +        const audit = await tx.auditResult.create({           
+       90 +          data: {                                             
+       91 +            binId: bin.id,                                    
+       92 +            autoOutcome: 'FAIL',                              
+       93 +            finalOutcome: 'FAIL',                             
+       94 +            totalExpected: 100,                               
+       95 +            totalCounted: 75,                                 
+       96 +            discrepancyRatio: 0.25,                           
+       97 +            countedAt: new Date(),                            
+       98 +          },                                                  
+       99 +          select: { id: true },                               
+      100 +        });                                                   
+      101 +        auditId = audit.id;                                   
+      102        });
+      103        await lockTaken;
+      104  
+     ...
+      122          include: { currentScore: true },
+      123        });
+      124        const factors = current.currentScore?.factors as unknown
+            as FactorBreakdown[];
+      110 -      const days = factors.find((f) => f.key === 'timeSinceLas
+          -tAudit')?.rawValue;                                           
+      111 -      expect(days).toBe(0); // the committed audit date, not "
+          -never audited"                                                
+     … 15 more lines (ctrl+o to expand)
+
+⏺ All tests pass. Now the check: move the timestamp back before the lock, and
+  the new assertions should fail.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Confirmed fix 1 resolves the issue—test fails without it and passes with it
+  restored, with the 28 seeded audits left intact. Committing fix 1 now, then
+  moving on to fix 2.
+
+⏺ Bash(T="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && git add
+      src/scoring/scoring.persist.ts src/scoring/scoring.service.ts
+      prisma/seed.ts test/scoring…)
+  ⎿   apps/api/src/scoring/scoring.persist.ts      | 5 ++++-
+      apps/api/src/scoring/scoring.service.spec.ts | 2 +-
+      2 files changed, 5 insertions(+), 2 deletions(-)
+     … +4 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/src/scoring/scoring.persist.ts (+4 -1)
+      32    // concurrent count then either finishes first, and we read i
+          ts committed
+      33    // changes, or waits for us. Without this, a full recompute c
+          ould repoint
+      34    // currentScoreId at a score built from pre-audit inputs (D-0
+          56).
+      35 +  // NO KEY UPDATE still conflicts with the count flow's UPDATE
+         + "Bin", but not with                                           
+      36 +  // inserts of rows that reference a bin (movements, tasks, au
+         +dits), so those                                                
+      37 +  // don't wait for the recompute or deadlock with it (D-057). 
+      38    await tx.$queryRaw`
+      36 -    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) 
+         -ORDER BY id FOR UPDATE`;                                       
+      39 +    SELECT id FROM "Bin" WHERE id = ANY(${[...binIds]}::int[]) 
+         +ORDER BY id FOR NO KEY UPDATE`;                                
+      40  
+      41    // Only after the lock: a count committed while we waited mus
+          t not look like it
+      42    // happened after `now`, or factors 4 and 5 would leave it ou
+          t (D-057).
+  ⎿  Updated apps/api/src/scoring/scoring.service.spec.ts (+1 -1)
+      132  
+      133        expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+      134        const [sql, ids] = tx.$queryRaw.mock.calls[0] as [Templa
+           teStringsArray, number[]];
+      135 -      expect(sql.join('?')).toMatch(/ORDER BY id FOR UPDATE/);
+      135 +      expect(sql.join('?')).toMatch(/ORDER BY id FOR NO KEY UP
+          +DATE/);                                                       
+      136        expect(ids).toEqual([7]);
+      137        const lockOrder = tx.$queryRaw.mock.invocationCallOrder[
+           0] ?? Infinity;
+      138        expect(lockOrder).toBeLessThan(
+
+⏺ Fix 2 passes every check. One more manual check against Postgres: while a
+  recompute-style lock is held on a bin, an insert that references that bin
+  should no longer wait.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ That run proved nothing: zsh didn't split the command stored in a variable, so
+  psql never ran. Re-running it with a shell function:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The results confirm the predictions: FOR UPDATE blocks the movement insert,
+  while FOR NO KEY UPDATE doesn't block it but still blocks the count flow's
+  UPDATE "Bin". I'll record D-057, then commit and push.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins &&
+      T="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && python3 -
+      <<'EOF'
+      p='DECISIONS.md'…)
+  ⎿  8b1d7bb docs(repo): record the score timestamp and lock mode decisions
+     26cd8e0 fix(scoring): lock bins with for no key update
+     b185e49 fix(scoring): take the score timestamp after the bin lock
+     27bf225 docs(repo): record the recompute locking decision
+  ⎿  Updated CLAUDE.md (+2 -1)
+      347  All five steps run in one transaction, and its **first write u
+           pdates the `Bin` row**
+      348  (`lastAuditedAt`). That locks the bin, so a concurrent "Recomp
+           ute scores" can't overwrite
+      349  the new `AUDIT` score with one built from pre-audit inputs. Th
+           e scoring code locks the
+      350 -bins it scores in id order before reading their inputs (D-056)
+          -.                                                             
+      350 +bins it scores in id order (`FOR NO KEY UPDATE`) before readin
+          +g their inputs and taking                                     
+      351 +the score timestamp (D-056, D-057).                           
+      352  
+      353  ## Features / Screens
+      354  
+  ⎿  Updated DECISIONS.md (+15 -0)
+      521    line counted down to 0 holds no product.
+      522  
+      523  ## D-056 — Recompute locks bins before reading inputs
+      524 +- **Status:** Amended by D-057.                               
+      525  - **Date:** 2026-10-04
+      526  - **Area:** Scoring / Code review
+      527  - **Decision:** Apply the `/code-review` finding on PR #8: eve
+           ry score computation runs
+     ...
+      534    passes with it. Id order avoids deadlocks between concurrent
+            recomputes.
+      535  - **Alternatives considered:** A conditional pointer update ba
+           sed on `computedAt`;
+      536    serializable isolation with retries.
+      537 +                                                              
+      538 +## D-057 — Score timestamp after the lock; `FOR NO KEY UPDATE`
+      539 +- **Date:** 2026-10-04                                        
+      540 +- **Area:** Scoring / Code review                             
+      541 +- **Decision:** Apply both findings from the second `/code-rev
+          +iew` of PR #8:                                                
+      542 +  - `computeAndStoreScores` takes `now` after the bin lock and
+          + returns it. Otherwise a                                      
+      543 +    count committed while the recompute waited (`countedAt` la
+          +ter than `now`) was left                                      
+      544 +    out of factors 4 and 5. The e2e race test now also saves a
+          + failed audit while the                                       
+      545 +    recompute waits; it fails with the old timestamp and passe
+          +s with the fix.                                               
+      546 +  - Lock with `FOR NO KEY UPDATE` instead of `FOR UPDATE`. It 
+          +still conflicts with the                                      
+      547 +    count flow's `UPDATE "Bin"`, but inserts that reference a 
+          +bin (movements, tasks,                                        
+      548 +    audits) no longer wait or deadlock. Checked against Postgr
+          +es: a movement insert is                                      
+      549 +    blocked by `FOR UPDATE` and not by `FOR NO KEY UPDATE`; th
+          +e bin update is blocked                                       
+      550 +    by both.                                                  
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ I've applied both fixes and pushed them to PR #8. The third /code-review
+  (medium, with docs/transcripts/ left out) is running now.
+
+  Fix 1: timestamp after the lock.
+  - A score's timestamp is now taken after the bin lock. A count saved while a
+    recompute is waiting is no longer left out of factors 4 and 5.
+  - The race test now also saves a failed audit while the recompute waits. With
+    the timestamp taken before the lock, the test fails (expected +0 to be 1);
+    with the fix, it passes.
+  - Its cleanup leaves the seeded data untouched (still 28 audits).
+
+  Fix 2: lighter lock.
+  - The lock is now FOR NO KEY UPDATE.
+  - Against the local Postgres: a movement insert waits behind a FOR UPDATE lock
+    but not behind FOR NO KEY UPDATE, while the count flow's bin update still
+    waits behind both.
+
+  Checks: 61 unit tests, 3 e2e tests, lint and typecheck all pass.
+
+  Commits:
+  - fix(scoring): take the score timestamp after the bin lock
+  - fix(scoring): lock bins with for no key update
+  - docs(repo): record the score timestamp and lock mode decisions
+
+  D-057 is recorded and D-056 is marked as amended by it. The concurrency note
+  in CLAUDE.md is updated.
+
+  When the review finishes, I'll report its findings and wait for your approval
+  before changing anything.
+
+✻ Sautéed for 1m 43s · done 1:25 AM
+
+⏺ Agent "/code-review medium — third review of branch feat…" finished · 55s
+
+⏺ The third review found no bugs in the app code. It also confirmed that the
+  lock order, the lock mode, deadlock safety and the calculator rules all match
+  CLAUDE.md.
+
+  It found one low-severity issue in the e2e test.
+
+  apps/api/test/scoring.e2e-spec.ts:130: cleanup can leave a fake failed audit 
+  in the database.
+  - If an assertion fails before the gate opens, cleanup still releases the
+    simulated count. That's most likely to happen with
+    expect(finished).toBe(false) on a slow machine.
+  - The count then saves its FAIL audit (25% off) after cleanup has already
+    checked auditId, so the audit is never deleted. It would raise factors 4 and
+    5 for that bin in later runs, until you reseed.
+  - The file's header comment ("never deletes data") is also out of date.
+
+  Proposed fix: move count outside the try, and in finally wait for the count to
+  finish before checking auditId.
+
+  -// Only appends score rows; it never deletes data.
+  +// Appends score rows. The race test restores the bin and deletes the audit 
+  it creates.
+  @@
+       let auditId: number | undefined;
+  +    let count: Promise<void> | undefined;
+       let release = (): void => {};
+  @@
+  -      const count = prisma.$transaction(async (tx) => {
+  +      count = prisma.$transaction(async (tx) => {
+  @@
+       } finally {
+         release();
+  +      // Let the simulated count finish, even after a failed assertion, so 
+  its
+  +      // audit is known and can be deleted.
+  +      await count?.catch(() => undefined);
+         // Undo the simulated count: its audit, the bin's audit date, and its
+  score.
+         if (auditId !== undefined) {
+
+  This doesn't change any app code. I'd commit it as test(scoring): clean up the
+  race test's audit on failure.
+
+  Should I apply this fix? Once it's in, I'll run /code-review again. If that
+  review comes back clean, PR #8 is ready to merge.
+
+✻ Baked for 2m 44s · done 1:26 AM
+
+❯ Apply it                                                                      
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/api &&
+      python3 - <<'EOF'
+      p='test/scoring.e2e-spec.ts'…)
+  ⎿        Tests  3 passed (3)
+     lint 0
+     tsc 0
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/test/scoring.e2e-spec.ts (+6 -2)
+      1  // Requires a seeded database: run `pnpm db:up`, `pnpm db:migrat
+         e`, and `pnpm db:seed`.
+      2 -// Only appends score rows; it never deletes data.              
+      2 +// Appends score rows. The race test restores the bin and delete
+        +s the audit it creates.                                         
+      3  import type { Server } from 'node:http';
+      4  import { INestApplication } from '@nestjs/common';
+      5  import { Test } from '@nestjs/testing';
+     ...
+      70      });
+      71  
+      72      let auditId: number | undefined;
+      73 +    let count: Promise<void> | undefined;                      
+      74      let release = (): void => {};
+      75      const gate = new Promise<void>((resolve) => (release = reso
+          lve));
+      76      let locked = (): void => {};
+     ...
+      80        // Stands in for the count flow: it updates the bin first
+           (D-056), which
+      81        // locks the row. Once the gate opens, after the recomput
+          e has started and
+      82        // is waiting, it saves a failed audit and commits.
+      82 -      const count = prisma.$transaction(async (tx) => {        
+      83 +      count = prisma.$transaction(async (tx) => {              
+      84          await tx.bin.update({
+      85            where: { id: bin.id },
+      86            data: { lastAuditedAt: new Date() },
+     ...
+      130        expect(raw('lastDiscrepancySize')).toBe(0.25);
+      131      } finally {
+      132        release();
+      133 +      // Let the simulated count finish, even after a failed a
+          +ssertion, so its                                              
+      134 +      // audit is known and can be deleted.                   
+      135 +      await count?.catch(() => undefined);                    
+      136        // Undo the simulated count: its audit, the bin's audit 
+           date, and its score.
+      137        if (auditId !== undefined) {
+      138          await prisma.auditResult.delete({ where: { id: auditId
+            } });
+
+⏺ The fix checks out — e2e tests, lint, and typecheck all pass, and the leftover
+  fake audit is now properly cleaned up. I'll commit this, record the decision,
+  and run the review again.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins &&
+      T="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && git add
+      apps/api/test/scoring.e2e-s…)
+  ⎿  b7bf510 docs(repo): record the race test cleanup decision
+     a58fb58 test(scoring): clean up the race test's audit on failure
+  ⎿  Updated DECISIONS.md (+8 -0)
+      548      audits) no longer wait or deadlock. Checked against Postgr
+           es: a movement insert is
+      549      blocked by `FOR UPDATE` and not by `FOR NO KEY UPDATE`; th
+           e bin update is blocked
+      550      by both.
+      551 +                                                              
+      552 +## D-058 — Race test cleans up after a failed assertion       
+      553 +- **Date:** 2026-10-04                                        
+      554 +- **Area:** Testing / Code review                             
+      555 +- **Decision:** Apply the third `/code-review` finding on PR #
+          +8: the e2e race test waits                                    
+      556 +  for its simulated count to finish before cleanup, so the FAI
+          +L audit it creates is                                         
+      557 +  always deleted. Verified by forcing an early assertion failu
+          +re: the seeded database                                       
+      558 +  kept exactly its 28 audits. The third review found no issues
+          + in the production code.                                      
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ I've applied the fix and pushed it to PR #8 as test(scoring): clean up the 
+  race test's audit on failure.
+
+  - Fix: the e2e race test now waits for its simulated count to finish before
+    cleaning up. The fake failed audit gets deleted even when an assertion fails
+    early.
+  - Verification: I forced an early failure, and the database still had exactly
+    its 28 seeded audits afterwards.
+  - Decision: recorded as D-058 and committed as docs(repo): record the race 
+    test cleanup decision.
+
+  The fourth /code-review (medium, with docs/transcripts/ left out) is running
+  now. If it comes back clean, PR #8 is ready for you to merge.
+
+✻ Crunched for 28s · done 1:28 AM
+⏺ Agent "/code-review medium — fourth review of branch fea…" finished · 42s
+
+⏺ The fourth /code-review of PR #8 found no issues, so the PR now meets the
+  review rule and is ready to merge into develop.
+
+  https://github.com/mrdavid0614/RivBins/pull/8
+
+  What changed during review:
+
+  ┌───────┬──────────────────────────────────┬───────────────────┬──────────┐
+  │ Round │             Finding              │        Fix        │ Decision │
+  ├───────┼──────────────────────────────────┼───────────────────┼──────────┤
+  │       │ A manual recompute could         │ Lock the bins     │          │
+  │ 1     │ overwrite a newer AUDIT score    │ before reading    │ D-056    │
+  │       │ with an older one                │ their inputs      │          │
+  ├───────┼──────────────────────────────────┼───────────────────┼──────────┤
+  │       │ The score's timestamp was set    │ Take the          │          │
+  │ 2     │ before the lock, so a count      │ timestamp after   │ D-057    │
+  │       │ saved while the recompute waited │ the lock          │          │
+  │       │  was left out                    │                   │          │
+  ├───────┼──────────────────────────────────┼───────────────────┼──────────┤
+  │       │ FOR UPDATE also blocked inserts  │ Use FOR NO KEY    │          │
+  │ 2     │ that reference a bin, which      │ UPDATE instead    │ D-057    │
+  │       │ risked deadlocks                 │                   │          │
+  ├───────┼──────────────────────────────────┼───────────────────┼──────────┤
+  │       │ The race test could leave a fake │ Clean it up even  │          │
+  │ 3     │  failed audit in the database    │ when an assertion │ D-058    │
+  │       │                                  │  fails            │          │
+  ├───────┼──────────────────────────────────┼───────────────────┼──────────┤
+  │ 4     │ None                             │ —                 │ —        │
+  └───────┴──────────────────────────────────┴───────────────────┴──────────┘
+
+  One note for feature 05 (count flow): the reviewer pointed out a possible
+  clock mismatch. If the database sets the audit's countedAt from its own clock
+  and that clock runs ahead of the API's, a recompute right after a count could
+  skip the audit. I suggest the count flow set countedAt from the API's clock,
+  the same clock the scoring code uses. I'll raise it in that feature's plan.
+
+  Next steps:
+  1. Do you want me to merge PR #8 (gh pr merge 8 --merge, matching how #7 was
+     merged), or will you merge it yourself?
+  2. After the merge, I'll show you a preview of this session for the 02-scoring
+     transcript and flag anything sensitive, then give you the /export command.
+
+✻ Cogitated for 1m 18s · done 1:28 AM
+
+❯ Merge the PR, then create a PR merging develop to main                        
+
+  Merged PR #8 (ctrl+o to expand)
+
+⏺ PR #8 is merged and develop is current at a7a77a4, but merging directly into
+  main would violate the git-flow rules in .claude/rules/git-workflow.md, which
+  only allow release/* or hotfix/* branches (with version tags) into
+  main—matching the Roadmap's plan for v1.0.0 after feature 05. I'll need to
+  create a release branch instead of merging develop directly.
+
+⏺ User answered Claude's questions:
+  ⎿  · The rules only allow release/* and hotfix/* branches into main. How 
+     should I bring develop into main? → Interim release (Recommended)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Bash(T="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" && git
+      checkout -q -b release/0.2.0 develop && sed -i '' '3s/"version":
+      "0.1.0"/"version": "0.2.0"/'…)
+  ⎿  package.json:3:  "version": "0.2.0",
+     apps/api/package.json:3:  "version": "0.2.0",
+     apps/web/package.json:3:  "version": "0.2.0",
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated DECISIONS.md (+11 -0)
+      556    for its simulated count to finish before cleanup, so the FAI
+           L audit it creates is
+      557    always deleted. Verified by forcing an early assertion failu
+           re: the seeded database
+      558    kept exactly its 28 audits. The third review found no issues
+            in the production code.
+      559 +                                                              
+      560 +## D-059 — Interim release 0.2.0                              
+      561 +- **Date:** 2026-10-04                                        
+      562 +- **Area:** Process / Git workflow                            
+      563 +- **Decision:** Bring `develop` into `main` after feature 02 t
+          +hrough an interim git-flow                                    
+      564 +  release, `release/0.2.0` (scoring service, seed data, and sc
+          +affold), instead of a                                         
+      565 +  direct `develop` → `main` PR. The release bumps every packag
+          +e to `0.2.0`. After the PR                                    
+      566 +  merges, `main` is tagged `v0.2.0` and `release/0.2.0` is mer
+          +ged back into `develop`.                                      
+      567 +  The Release row (`v1.0.0`) stays planned after feature 05.  
+      568 +- **Alternatives considered:** A direct `develop` → `main` PR 
+          +as a one-time exception to                                    
+      569 +  the git-flow rule; waiting for `v1.0.0`.                    
+  ⎿  Updated apps/api/package.json (+1 -1)
+      1  {
+      2    "name": "@rivbins/api",
+      3 -  "version": "0.1.0",                                           
+      3 +  "version": "0.2.0",                                           
+      4    "description": "Smart Cycle Count Scoring — NestJS API",
+      5    "private": true,
+      6    "license": "UNLICENSED",
+  ⎿  Updated apps/web/package.json (+1 -1)
+      1  {
+      2    "name": "@rivbins/web",
+      3 -  "version": "0.1.0",                                           
+      3 +  "version": "0.2.0",                                           
+      4    "description": "Smart Cycle Count Scoring — Next.js web app",
+      5    "private": true,
+      6    "type": "module",
+  ⎿  Updated package.json (+1 -1)
+      1  {
+      2    "name": "rivbins",
+      3 -  "version": "0.1.0",                                           
+      3 +  "version": "0.2.0",                                           
+      4    "private": true,
+      5    "description": "Smart Cycle Count Scoring \u2014 risk-based bi
+         n auditing for warehouses",
+      6    "packageManager": "pnpm@10.34.6",
+  ⎿  Updated packages/shared/package.json (+1 -1)
+      1  {
+      2    "name": "@rivbins/shared",
+      3 -  "version": "0.1.0",                                           
+      3 +  "version": "0.2.0",                                           
+      4    "private": true,
+      5    "description": "API contract types shared by the API and the w
+         eb app",
+      6    "type": "module",
+
+  Created PR #9, ran 1 shell command (ctrl+o to expand)
+
+⏺ PR #9 is open. Under the project rules, every PR needs a /code-review, release
+  PRs included, so I'm running it against main.
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ PR #8 is merged into develop. I didn't open the PR straight from develop to
+  main: as you chose, it goes through a release/0.2.0 branch instead. That PR is
+  open as #9, and its required /code-review is still running.
+
+  https://github.com/mrdavid0614/RivBins/pull/9
+
+  - Release branch: I created release/0.2.0 from develop and pushed it. It has
+    two commits:
+    - build(repo): bump version to 0.2.0, which updates the version in all four
+      package.json files.
+    - docs(repo): record the interim 0.2.0 release, which records D-059.
+  - PR #9: goes into main. Its description lists what's included since the last
+    merge into main (PRs #4–#8 and transcripts 00 and 01) and the steps to run
+    after merging.
+  - Review: /code-review at medium against main, with docs/transcripts/ left
+    out. I'll report what it finds and wait for your approval before changing
+    anything.
+
+  Once the review is clean, the remaining steps are:
+  1. Merge PR #9.
+  2. Tag main as v0.2.0 and push the tag.
+  3. Merge release/0.2.0 back into develop, through a PR like #3.
+  4. Close the session: I show you a preview for the 02-scoring transcript, then
+     give you the /export command.
+
+✻ Crunched for 56s · done 1:30 AM
+
+⏺ Agent "/code-review medium — review release PR #9 (relea…" finished · 20s
+
+⏺ The /code-review of release PR #9 found nothing to fix, so the PR can merge as
+  it is.
+
+  https://github.com/mrdavid0614/RivBins/pull/9
+
+  The review checked three things:
+  - Version bump: all four package.json files are at 0.2.0, and no stray 0.1.0
+    is left. The lockfile doesn't need regenerating.
+  - D-059: it's added at the end of DECISIONS.md with the next ID, nothing older
+    is rewritten, and it fits the git-flow rules.
+  - Merge into main: main has no commits missing from the release branch, so it
+    merges cleanly. The only lines removed are three that are replaced by edited
+    versions, and none of them drops a rule.
+
+  You asked me to open the PR, not merge it, so I've stopped here. Should I
+  finish the release?
+  1. gh pr merge 9 --merge
+  2. Tag main as v0.2.0 and push the tag.
+  3. Open a PR from release/0.2.0 back into develop, then merge it once it
+     passes review.
+
+  After that, I'll show you the preview for the 02-scoring transcript.
+
+✻ Cogitated for 1m 47s · done 1:31 AM
+
+❯ yes, finish the release                                                       
+
+  Merged PR #9, created PR #10 (ctrl+o to expand)
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ Release 0.2.0 is merged into main (PR #9), and main is tagged v0.2.0, which is
+  pushed to GitHub. The last step, merging the release back into develop, is
+  waiting on its review.
+
+  The back-merge is PR #10, from release/0.2.0 into develop:
+  https://github.com/mrdavid0614/RivBins/pull/10
+
+  It carries only the release's two commits: the version bump to 0.2.0 and the
+  D-059 entry. Both were already reviewed in PR #9. The required /code-review is
+  running now against develop, with docs/transcripts/ left out. If it comes
+  back clean, I'll merge #10 and then show you the preview for the 02-scoring
+  transcript.
+
+✻ Crunched for 29s · done 1:32 AM
+
+⏺ Agent "/code-review medium — review back-merge PR #10 (r…" finished · 11s
+
+  Merged PR #10 (ctrl+o to expand)
+
+⏺ Release 0.2.0 is finished: PR #10 passed review and is merged, so develop
+  (f32a25f) has the version bump and D-059. main is tagged v0.2.0.
+
+  Transcript preview: 02-scoring
+
+  Feature: 02, scoring service and recompute. It's merged into develop, and the
+  Roadmap shows 02 Done and 03 Next.
+
+  What this session covered:
+  - Scoring code: a config file, a pure calculator, an input loader that uses a
+    fixed number of queries, the recompute service, and POST /scoring/recompute.
+  - Seed: pnpm db:seed now stores SEED scores.
+  - Docs: the README Scoring section.
+  - Locking: a score recompute and a count can't overwrite each other's results
+    when they run at the same time.
+  - Previous transcript: 01-schema-seed was committed as the branch's first
+    commit after you redacted its 7 findings. The scan now exits 0.
+
+  Decisions:
+  - D-049: the feature plan.
+  - D-050: the thresholds and weights.
+  - D-051 and D-054: rounding.
+  - D-052: the discrepancy is stored as a ratio.
+  - D-053: the recompute endpoint returns a summary.
+  - D-055: SKU mix counts only lines with stock.
+  - D-056 and D-057: the bin lock, its timestamp, and FOR NO KEY UPDATE.
+  - D-058: the race test's cleanup.
+  - D-059: the interim release.
+
+  PRs:
+  - #8 feat(scoring): 14 commits, merged into develop.
+  - #9 release 0.2.0: merged into main and tagged v0.2.0.
+  - #10: the release merged back into develop.
+
+  Review findings, all fixed with your approval:
+  - Round 1: a recompute could overwrite a newer AUDIT score.
+  - Round 2: the score's timestamp was taken before the lock, and FOR UPDATE was
+    stronger than needed.
+  - Round 3: the race test could leave a fake audit behind after a failure.
+  - Round 4, plus the reviews of PRs #9 and #10: none.
+
+  Sensitive content: I found nothing to flag in this session. The gitleaks
+  results only showed line numbers and rule IDs, never the values. The database
+  commands passed only the user and database name, never a password. The scan
+  runs again on the transcript before it's committed at the start of feature 03.
+
+  Pending for feature 05: the count flow should set countedAt from the API's
+  clock, not the database's. I'll bring it up in that plan.
+
+  Should I go ahead with the export? If yes, run:
+
+  /export docs/transcripts/02-scoring.txt
+
+  Then run /clear and start feature 03 (03-heatmap) in the new session.
+
+✻ Baked for 1m 1s · done 1:32 AM
+
+❯ The current recompute endpoint allows recompute for only one bin?             
+
+⏺ No. POST /scoring/recompute takes no parameters and always rescores all 36 
+  bins in one transaction.
+
+  There's no HTTP endpoint for rescoring a single bin. That only exists as the
+  service method ScoringService.recomputeBin(binId, trigger, auditResultId?, 
+  tx?) in apps/api/src/scoring/scoring.service.ts. It's there for the count flow
+  in feature 05, which will call it inside the transaction that saves a count,
+  so the bin's new AUDIT score is stored together with the audit.
+
+  This matches the approved rules:
+  - D-005 / CLAUDE.md "Recompute": the manual "Recompute scores" action covers
+    all bins, and the automatic recompute after a count covers only the audited
+    bin.
+  - D-049: the plan exposed only the all-bins endpoint and left recomputeBin for
+    the count flow.
+
+  If you'd like a manual single-bin recompute too (for example POST 
+  /bins/:id/recompute, for a button in the bin detail drawer), that would be a
+  new decision and an update to the Recompute section of CLAUDE.md. It would fit
+  into feature 03 (heatmap and bin detail), and I'd include it in that plan.
+
+✻ Crunched for 6s · done 1:34 AM

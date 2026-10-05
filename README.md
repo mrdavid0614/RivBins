@@ -140,6 +140,82 @@ A count resets factors 1–3. A passed count also brings factor 5 to about 0, so
 drops sharply. A failed count raises factor 4, and factor 5 shows how far off it was, so
 the bin stays risky.
 
+## Heatmap dashboard
+
+The home page (`http://localhost:3000`) shows every bin grouped by aisle and rack, one
+grid per rack (top shelf first). Bins are colored by their current score:
+
+| Band | Score |
+|------|-------|
+| Green (low risk) | 0–39 |
+| Yellow (medium risk) | 40–69 |
+| Red (high risk) | 70–100 |
+| Gray | not scored yet |
+
+Click a bin to open its detail drawer (`/?bin=A-01-03`, shareable). It shows the current
+score with the per-factor breakdown, the score history with the trigger of each change,
+the last audit date, and the pallets in the bin with their product lines. "Recompute
+scores" rescores every bin and refreshes the heatmap. A blue dot marks bins with a
+pending audit task.
+
+## Audit plans and tasks
+
+The tasks page (`http://localhost:3000/tasks`) generates audit plans. Enter **N** and
+"Generate audit plan" creates a plan with the N riskiest bins by current score (ties by
+bin code), skipping bins that already have a `PENDING` task. Only scored bins without a
+pending task are eligible, and N must be between 1 and the number of eligible bins; with
+none eligible, no plan is created. Existing pending tasks are never changed: a task
+becomes `DONE` when its bin is counted.
+
+The tasks table shows each task's plan, rank, bin, score when the plan was created,
+current score, status, and dates. Filter it by status (`/tasks?status=pending`) or by
+plan (`/tasks?plan=3`).
+
+## Count flow
+
+The count pages (`http://localhost:3000/count`) are built for phones. Open a bin by typing
+its code (a hardware scanner that types the code works too) or tap one of the pending
+tasks. "Count this bin" in the bin drawer and "Count" in the tasks table open the same page.
+
+1. The page lists the pallets in the bin and their product lines, each with its expected
+   quantity. Lines with quantity 0 are not counted. An empty bin can be counted to confirm
+   it is empty.
+2. Enter the counted quantity of every line. Each line shows its difference as you type.
+3. Once every line is counted, the page shows the **auto result**: pass only if every line
+   matches exactly (the tolerance, `toleranceUnits` in
+   `apps/api/src/audits/count.config.ts`, is 0 units). Pick the other result to override
+   it; both the auto and the final result are saved.
+4. "Save count" stores the result in one transaction:
+   - Both outcomes: the per-line differences, the discrepancy ratio, and the last audit
+     date are saved, and the bin's pending task is marked `DONE`.
+   - Final result **FAIL**: each mismatched line gets an audit-generated `ADJUSTMENT`, and
+     its quantity is set to the counted value.
+   - Final result **PASS**: the differences are recorded, and inventory is not changed.
+   - The bin is rescored with the `AUDIT` trigger.
+
+   The result screen shows the score before and after, and links to the next pending task.
+
+If the bin's inventory changed after the sheet was loaded, the save is rejected and the
+page asks you to reload the sheet.
+
+## API
+
+| Method | Path | Returns |
+|--------|------|---------|
+| `GET` | `/health` | API and database status |
+| `GET` | `/warehouse/layout` | Aisles → racks → bins with each bin's current score and pending task |
+| `GET` | `/bins/:code` | Bin detail: location, last audit, current score with breakdown, pallets (404 if unknown) |
+| `GET` | `/bins/:code/scores?limit=20` | Score history, newest first (`limit` 1–100, default 20) |
+| `POST` | `/scoring/recompute` | Rescores every bin; returns `{ trigger, binsRecomputed, computedAt }` |
+| `GET` | `/audit-plans/eligibility` | `{ eligibleBins }`: scored bins without a pending task |
+| `POST` | `/audit-plans` | Body `{ n }`: creates a plan with the Top N eligible bins (400 if N is out of range, 409 if none are eligible) |
+| `GET` | `/audit-plans` | Plan summaries with task counts, newest first |
+| `GET` | `/audit-tasks?status=&planId=&limit=100` | Tasks, newest plan first then by rank (`status` `PENDING`/`DONE`, `limit` 1–500) |
+| `GET` | `/bins/:code/count-sheet` | Lines to count (pallet item id, SKU, expected quantity), pending task, and tolerance |
+| `POST` | `/bins/:code/counts` | Body `{ lines: [{ palletItemId, expectedQty, countedQty }], finalOutcome }`: saves the count and returns the result with the new score (400 for an invalid body, 404 for an unknown bin, 409 if the sheet is stale) |
+
+Bin codes are matched case-insensitively.
+
 ## Project docs
 
 - [`CLAUDE.md`](CLAUDE.md): business rules, scoring model, and conventions.
