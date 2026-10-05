@@ -692,3 +692,55 @@ All decisions made during development, in chronological order.
   - The tasks page asks for an explicit limit of 100 rows and says so when the list is
     cut off ("Showing the 100 most recent tasks"), instead of silently hiding older tasks.
 - **Alternatives considered:** Pagination for the tasks table (out of scope per D-067).
+
+## D-072 — Feature 05 plan: mobile count flow
+- **Date:** 2026-10-05
+- **Area:** Count flow / API / Process
+- **Decision:** Approve the plan for feature 05 (`feature/count-flow`):
+  - `GET /bins/:code/count-sheet` returns the bin's expected pallets and lines (with
+    pallet item ids), its pending task, and the tolerance.
+  - `POST /bins/:code/counts { lines: [{ palletItemId, expectedQty, countedQty }],
+    finalOutcome }` saves the count in one transaction: update `Bin.lastAuditedAt`
+    first (bin lock, D-056/D-057), validate the lines, store the `AuditResult` and its
+    lines (linked to the pending task, if any), create audit-generated adjustments and
+    correct quantities when the final outcome is FAIL, mark the task `DONE`, and
+    recompute the bin with the `AUDIT` trigger. Returns the result with the previous
+    and new score.
+  - `count.config.ts` holds the tolerance (`toleranceUnits: 0`, D-002);
+    `evaluateCount` is a pure, unit-tested function.
+  - Web: `/count` (code input + pending tasks) and `/count/[binCode]` (per-line inputs,
+    live auto outcome, override, save, result panel); "Count" links in the nav, bin
+    drawer, and tasks table.
+  - E2e tests run against the seeded database and restore it afterwards.
+  - Out of scope: camera scanning, unexpected products, editing/deleting results,
+    offline mode, multi-bin counts.
+
+## D-073 — The count sheet skips lines with quantity 0
+- **Date:** 2026-10-05
+- **Area:** Count flow
+- **Decision:** Only pallet lines with `quantity > 0` are counted, matching D-055 and
+  D-065.
+- **Alternatives considered:** Showing them so the counter can report found stock.
+
+## D-074 — Bin codes are typed or scanned with a keyboard scanner
+- **Date:** 2026-10-05
+- **Area:** Count flow / Web
+- **Decision:** The search is a text input, which also works with hardware scanners
+  that type the code. No camera scanning.
+- **Alternatives considered:** Camera scanning with `BarcodeDetector` (unsupported in
+  Safari).
+
+## D-075 — A stale count sheet is rejected with 409
+- **Date:** 2026-10-05
+- **Area:** Count flow / API
+- **Decision:** The submission carries each line's `expectedQty`. If the bin's lines or
+  quantities changed since the sheet was loaded, the API returns `409` and the counter
+  reloads the sheet, so the saved auto outcome is the one the counter saw.
+- **Alternatives considered:** Saving against the current quantities.
+
+## D-076 — Empty bins can be counted
+- **Date:** 2026-10-05
+- **Area:** Count flow
+- **Decision:** A bin with no lines can be counted; it passes automatically with a
+  discrepancy of 0, confirming the bin is empty.
+- **Alternatives considered:** Refusing the count.
