@@ -223,7 +223,9 @@ across bins so the scores spread across green, yellow, and red.
 
 ### Audits
 - **AuditPlan:** created on demand with a user-chosen **N**. It contains the Top N riskiest
-  bins that **do not already have a `PENDING` task**.
+  bins that **do not already have a `PENDING` task** (bins with no score are not
+  eligible; ties are broken by bin code). N must be between 1 and the number of
+  eligible bins (D-069); with no eligible bins, no plan is created (D-068).
 - **AuditTask:** one per bin in a plan. Status is `PENDING` or `DONE`.
   Existing `PENDING` tasks are never modified when a new plan is created.
   The database enforces **at most one `PENDING` task per bin** (partial unique index
