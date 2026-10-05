@@ -110,6 +110,7 @@ export class AuditsService {
           items.map((item) => ({
             palletItemId: item.id,
             expectedQty: item.quantity,
+            label: `${item.product.sku} on ${item.pallet.code}`,
           })),
         );
         if (mismatch) {

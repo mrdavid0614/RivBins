@@ -72,8 +72,15 @@ describe('parseCountRequest', () => {
 });
 
 describe('findSheetMismatch', () => {
-  const currentFirst = { palletItemId: 1, expectedQty: 10 };
-  const current = [currentFirst, { palletItemId: 2, expectedQty: 4 }];
+  const currentFirst = {
+    palletItemId: 1,
+    expectedQty: 10,
+    label: 'SKU-A on PLT-1',
+  };
+  const current = [
+    currentFirst,
+    { palletItemId: 2, expectedQty: 4, label: 'SKU-B on PLT-1' },
+  ];
 
   it('returns null when the lines match', () => {
     expect(findSheetMismatch(valid.lines, current)).toBeNull();
@@ -86,16 +93,16 @@ describe('findSheetMismatch', () => {
         [...valid.lines, { palletItemId: 3, expectedQty: 1, countedQty: 1 }],
         current,
       ),
-    ).toMatch(/line 3 is no longer in the bin/i);
+    ).toMatch(/no longer in the bin/);
   });
 
   it('flags a changed expected quantity', () => {
     expect(
       findSheetMismatch(valid.lines, [
         currentFirst,
-        { palletItemId: 2, expectedQty: 6 },
+        { palletItemId: 2, expectedQty: 6, label: 'SKU-B on PLT-1' },
       ]),
-    ).toMatch(/changed from 4 to 6/);
+    ).toMatch(/SKU-B on PLT-1 changed from 4 to 6/);
   });
 
   it('flags a line that was not counted', () => {

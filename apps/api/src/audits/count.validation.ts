@@ -77,6 +77,8 @@ export function parseCountRequest(
 export interface CurrentLine {
   palletItemId: number;
   expectedQty: number;
+  /** How the counter knows the line, e.g. "SKU-1010 on PLT-0072". */
+  label: string;
 }
 
 /**
@@ -88,17 +90,15 @@ export function findSheetMismatch(
   submitted: readonly CountLineInput[],
   current: readonly CurrentLine[],
 ): string | null {
-  const expectedById = new Map(
-    current.map((line) => [line.palletItemId, line.expectedQty]),
-  );
+  const currentById = new Map(current.map((line) => [line.palletItemId, line]));
 
   for (const line of submitted) {
-    const expected = expectedById.get(line.palletItemId);
-    if (expected === undefined) {
-      return `Line ${line.palletItemId} is no longer in the bin`;
+    const currentLine = currentById.get(line.palletItemId);
+    if (currentLine === undefined) {
+      return 'A counted line is no longer in the bin';
     }
-    if (expected !== line.expectedQty) {
-      return `The expected quantity of line ${line.palletItemId} changed from ${line.expectedQty} to ${expected}`;
+    if (currentLine.expectedQty !== line.expectedQty) {
+      return `The expected quantity of ${currentLine.label} changed from ${line.expectedQty} to ${currentLine.expectedQty}`;
     }
   }
   if (submitted.length !== current.length) {
