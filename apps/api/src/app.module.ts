@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AuditPlansModule } from './audit-plans/audit-plans.module.js';
 import { BinsModule } from './bins/bins.module.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -14,6 +15,7 @@ import { WarehouseModule } from './warehouse/warehouse.module.js';
     ScoringModule,
     WarehouseModule,
     BinsModule,
+    AuditPlansModule,
   ],
 })
 export class AppModule {}
