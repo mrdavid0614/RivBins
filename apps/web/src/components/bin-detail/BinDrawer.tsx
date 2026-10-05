@@ -1,4 +1,5 @@
 import type { BinDetailResponse, ScoreHistoryEntry } from '@rivbins/shared';
+import Link from 'next/link';
 import { PendingMarker } from '@/components/heatmap/RackGrid';
 import { ApiError, apiFetch } from '@/lib/api';
 import { formatAge, formatDateTime } from '@/lib/format';
@@ -71,7 +72,11 @@ export async function BinDrawer({ code }: { code: string }) {
           {bin.pendingTask && (
             <p className="mt-1 flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-300">
               <PendingMarker />
-              Pending audit task · plan #{bin.pendingTask.planId}, rank {bin.pendingTask.rank}
+              Pending audit task ·{' '}
+              <Link href={`/tasks?plan=${bin.pendingTask.planId}`} className="underline underline-offset-2">
+                plan #{bin.pendingTask.planId}
+              </Link>
+              , rank {bin.pendingTask.rank}
             </p>
           )}
         </div>
