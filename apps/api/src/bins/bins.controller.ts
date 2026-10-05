@@ -8,13 +8,11 @@ import {
   Query,
 } from '@nestjs/common';
 import type { BinDetailResponse, ScoreHistoryEntry } from '@rivbins/shared';
+import { normalizeBinCode as normalizeCode } from './bin-code.js';
 import { BinsService } from './bins.service.js';
 
 export const DEFAULT_HISTORY_LIMIT = 20;
 export const MAX_HISTORY_LIMIT = 100;
-
-/** Bin codes are matched case-insensitively, so typed or scanned codes both work. */
-const normalizeCode = (code: string): string => code.trim().toUpperCase();
 
 @Controller('bins')
 export class BinsController {
