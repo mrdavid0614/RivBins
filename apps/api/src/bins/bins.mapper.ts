@@ -2,6 +2,7 @@
 import type {
   BinDetailResponse,
   FactorBreakdown,
+  PendingTaskRef,
   ScoreHistoryEntry,
   ScoreTrigger,
 } from '@rivbins/shared';
@@ -23,6 +24,8 @@ export interface BinDetailRow {
   rack: { code: string; aisle: { code: string } };
   /** `factors` is the BinScore JSON column: FactorBreakdown[] as written by the scorer. */
   currentScore: (ScoreRow & { factors: unknown }) | null;
+  /** PENDING tasks only: at most one. */
+  tasks: PendingTaskRef[];
   pallets: {
     code: string;
     items: { quantity: number; product: { sku: string; name: string } }[];
@@ -46,6 +49,7 @@ export function toBinDetail(row: BinDetailRow): BinDetailResponse {
       // Stored with the threshold and weight it used, so it is shown as is.
       factors: current.factors as FactorBreakdown[],
     },
+    pendingTask: row.tasks[0] ?? null,
     pallets: [...row.pallets]
       .sort((a, b) => a.code.localeCompare(b.code))
       .map((pallet) => ({

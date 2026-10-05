@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { BinDetailResponse, ScoreHistoryEntry } from '@rivbins/shared';
+import { PENDING_TASK_SELECT } from '../audit-plans/pending-task.select.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toBinDetail, toScoreHistoryEntry } from './bins.mapper.js';
 
@@ -26,6 +27,7 @@ export class BinsService {
         lastAuditedAt: true,
         rack: { select: { code: true, aisle: { select: { code: true } } } },
         currentScore: { select: { ...SCORE_SELECT, factors: true } },
+        tasks: PENDING_TASK_SELECT,
         pallets: {
           select: {
             code: true,

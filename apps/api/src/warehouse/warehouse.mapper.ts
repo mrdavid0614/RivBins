@@ -1,5 +1,5 @@
 // Pure mapping from Prisma rows to the GET /warehouse/layout contract.
-import type { WarehouseLayoutResponse } from '@rivbins/shared';
+import type { PendingTaskRef, WarehouseLayoutResponse } from '@rivbins/shared';
 
 export interface LayoutRow {
   code: string;
@@ -17,6 +17,8 @@ export interface LayoutRow {
         position: number;
         lastAuditedAt: Date | null;
         currentScore: { score: number; computedAt: Date } | null;
+        /** PENDING tasks only: at most one. */
+        tasks: PendingTaskRef[];
       }[];
     }[];
   }[];
@@ -49,6 +51,7 @@ export function toWarehouseLayout(row: LayoutRow): WarehouseLayoutResponse {
             score: bin.currentScore?.score ?? null,
             scoreComputedAt: bin.currentScore?.computedAt.toISOString() ?? null,
             lastAuditedAt: bin.lastAuditedAt?.toISOString() ?? null,
+            pendingTask: bin.tasks[0] ?? null,
           })),
       })),
     })),

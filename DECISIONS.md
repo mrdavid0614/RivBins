@@ -632,3 +632,63 @@ All decisions made during development, in chronological order.
     trigger into one line ("Manual recompute ×12", with a time range). Audit rows are
     never merged. The API still returns every row (D-063); only the presentation
     changes, so the timeline shows the changes instead of 20 identical rows.
+
+## D-067 — Feature 04 plan: audit plans and tasks
+- **Date:** 2026-10-05
+- **Area:** Audit plans / API / Process
+- **Decision:** Approve the plan for feature 04 (`feature/audit-plans`):
+  - `POST /audit-plans { n }` creates a plan from the top N bins by current score
+    (ties by bin code), skipping bins with a `PENDING` task (D-006) and bins with no
+    score. It runs in one transaction under a Postgres advisory lock, so concurrent
+    plans never pick the same bins, and inserts tasks with `skipDuplicates`, so a
+    violation of `AuditTask_binId_pending_key` is skipped as "already pending".
+    `scoreAtCreation` snapshots the score.
+  - `GET /audit-plans` lists plan summaries; `GET /audit-tasks?status=&planId=&limit=`
+    lists task rows (newest plan first, then rank).
+  - The selection is a pure, unit-tested function; e2e tests run against the seeded
+    database and clean up their plans and tasks.
+  - Web: a `/tasks` page with the N input, a "Generate audit plan" server action and a
+    tasks table filterable by status; a nav header links Heatmap and Tasks.
+  - Pending-task badges (deferred by D-060) are included: heatmap cells and the bin
+    drawer show a bin's `PENDING` task.
+  - Out of scope: completing tasks (feature 05), cancelling/deleting tasks or plans,
+    pagination, recomputing scores before planning.
+
+## D-068 — No eligible bins returns 409
+- **Date:** 2026-10-05
+- **Area:** Audit plans / API
+- **Decision:** When no bin is eligible (every scored bin already has a `PENDING`
+  task), `POST /audit-plans` returns `409 Conflict` and creates no plan.
+- **Rationale:** Keeps the plan list free of empty plans.
+- **Alternatives considered:** Creating an empty plan.
+
+## D-069 — N is capped at the number of eligible bins
+- **Date:** 2026-10-05
+- **Area:** Audit plans / API
+- **Decision:** N must be an integer from 1 to the number of eligible bins (scored bins
+  without a `PENDING` task). A larger N returns `400` and creates no plan, so a plan
+  always holds exactly N tasks. `GET /audit-plans/eligibility` returns
+  `{ eligibleBins }` so the form can show the limit and set the input's maximum. The
+  count is checked inside the plan transaction, under the advisory lock.
+- **Alternatives considered:** A fixed 1–100 range that creates fewer than N tasks
+  when not enough bins are eligible (the original proposal).
+
+## D-070 — Implementation adjustments in feature 04
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Web
+- **Decision:** Small changes to the approved plan (D-067), made during implementation:
+  - The plan creation and listing endpoints ship in one commit instead of two.
+  - The tasks table also filters by plan (`/tasks?plan=3`): plan numbers in the table and
+    the drawer's pending-task line link to it.
+  - `apiFetch` throws the API's error `message`, so the form shows why a plan was
+    rejected (N above the eligible bins, or none eligible).
+
+## D-071 — Review fixes for feature 04
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Code review
+- **Decision:** Apply both low-severity findings from the `/code-review` of PR #12:
+  - `GET /audit-tasks` rejects a repeated `status` parameter (an array) with `400`
+    instead of failing with `500`.
+  - The tasks page asks for an explicit limit of 100 rows and says so when the list is
+    cut off ("Showing the 100 most recent tasks"), instead of silently hiding older tasks.
+- **Alternatives considered:** Pagination for the tasks table (out of scope per D-067).
