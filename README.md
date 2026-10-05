@@ -171,6 +171,33 @@ The tasks table shows each task's plan, rank, bin, score when the plan was creat
 current score, status, and dates. Filter it by status (`/tasks?status=pending`) or by
 plan (`/tasks?plan=3`).
 
+## Count flow
+
+The count pages (`http://localhost:3000/count`) are built for phones. Open a bin by typing
+its code (a hardware scanner that types the code works too) or tap one of the pending
+tasks. "Count this bin" in the bin drawer and "Count" in the tasks table open the same page.
+
+1. The page lists the pallets in the bin and their product lines, each with its expected
+   quantity. Lines with quantity 0 are not counted. An empty bin can be counted to confirm
+   it is empty.
+2. Enter the counted quantity of every line. Each line shows its difference as you type.
+3. Once every line is counted, the page shows the **auto result**: pass only if every line
+   matches exactly (the tolerance, `toleranceUnits` in
+   `apps/api/src/audits/count.config.ts`, is 0 units). Pick the other result to override
+   it; both the auto and the final result are saved.
+4. "Save count" stores the result in one transaction:
+   - Both outcomes: the per-line differences, the discrepancy ratio, and the last audit
+     date are saved, and the bin's pending task is marked `DONE`.
+   - Final result **FAIL**: each mismatched line gets an audit-generated `ADJUSTMENT`, and
+     its quantity is set to the counted value.
+   - Final result **PASS**: the differences are recorded, and inventory is not changed.
+   - The bin is rescored with the `AUDIT` trigger.
+
+   The result screen shows the score before and after, and links to the next pending task.
+
+If the bin's inventory changed after the sheet was loaded, the save is rejected and the
+page asks you to reload the sheet.
+
 ## API
 
 | Method | Path | Returns |
@@ -184,6 +211,8 @@ plan (`/tasks?plan=3`).
 | `POST` | `/audit-plans` | Body `{ n }`: creates a plan with the Top N eligible bins (400 if N is out of range, 409 if none are eligible) |
 | `GET` | `/audit-plans` | Plan summaries with task counts, newest first |
 | `GET` | `/audit-tasks?status=&planId=&limit=100` | Tasks, newest plan first then by rank (`status` `PENDING`/`DONE`, `limit` 1–500) |
+| `GET` | `/bins/:code/count-sheet` | Lines to count (pallet item id, SKU, expected quantity), pending task, and tolerance |
+| `POST` | `/bins/:code/counts` | Body `{ lines: [{ palletItemId, expectedQty, countedQty }], finalOutcome }`: saves the count and returns the result with the new score (400 for an invalid body, 404 for an unknown bin, 409 if the sheet is stale) |
 
 Bin codes are matched case-insensitively.
 

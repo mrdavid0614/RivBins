@@ -50,6 +50,9 @@ export function TasksTable({ tasks }: { tasks: AuditTaskRow[] }) {
             <th className={HEAD}>Status</th>
             <th className={HEAD}>Created</th>
             <th className={HEAD}>Completed</th>
+            <th className={HEAD}>
+              <span className="sr-only">Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -80,6 +83,16 @@ export function TasksTable({ tasks }: { tasks: AuditTaskRow[] }) {
               </td>
               <td className={`${CELL} text-zinc-600 dark:text-zinc-400`}>{formatDateTime(task.createdAt)}</td>
               <td className={`${CELL} text-zinc-600 dark:text-zinc-400`}>{formatDateTime(task.completedAt)}</td>
+              <td className={CELL}>
+                {task.status === 'PENDING' && (
+                  <Link
+                    href={`/count/${encodeURIComponent(task.binCode)}`}
+                    className="rounded-md border border-zinc-300 px-2 py-0.5 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                  >
+                    Count
+                  </Link>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

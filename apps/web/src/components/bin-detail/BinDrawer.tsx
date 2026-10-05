@@ -85,6 +85,12 @@ export async function BinDrawer({ code }: { code: string }) {
             {current?.score ?? '—'}
           </span>
           <span className="text-xs text-zinc-500">{band.label}</span>
+          <Link
+            href={`/count/${encodeURIComponent(bin.code)}`}
+            className="mt-1 rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Count this bin
+          </Link>
         </div>
       </header>
 

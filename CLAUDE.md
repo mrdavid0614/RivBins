@@ -149,8 +149,8 @@ the Release row (R) has no transcript.
 | 02 | Scoring service + recompute                         | `02-scoring`       | Done     |
 | 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Done     |
 | 04 | Audit plans + tasks                                 | `04-audit-plans`   | Done     |
-| 05 | Mobile count flow                                   | `05-count-flow`    | Next     |
-| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Planned |
+| 05 | Mobile count flow                                   | `05-count-flow`    | Done     |
+| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Next     |
 
 ## Project Structure
 
@@ -323,7 +323,9 @@ Score → Heatmap → Audit Plan (Top N) → Count → Recompute → New score
 ## Count Logic
 
 ### Granularity
-The user counts **each product line on each pallet** in the bin.
+The user counts **each product line on each pallet** in the bin. Only lines with
+quantity > 0 are on the count sheet (D-073). An empty bin can still be counted: it
+passes automatically with a discrepancy of 0 (D-076).
 
 ### Pass/fail: automatic with manual override
 1. **Auto result:** the bin passes only if **every** pallet line matches its expected
@@ -345,6 +347,10 @@ The user counts **each product line on each pallet** in the bin.
 3. Update the bin's last audit date.
 4. Mark the bin's `PENDING` task as `DONE`, if one exists.
 5. Recompute that bin's score.
+
+The submission carries the expected quantity of every line the counter saw. If the bin's
+lines or quantities changed since the sheet was loaded, the save is rejected (`409`) and
+the counter reloads the sheet (D-075).
 
 All five steps run in one transaction, and its **first write updates the `Bin` row**
 (`lastAuditedAt`). That locks the bin, so a concurrent "Recompute scores" can't overwrite

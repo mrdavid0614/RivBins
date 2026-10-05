@@ -6,7 +6,12 @@ import { usePathname } from 'next/navigation';
 const LINKS = [
   { href: '/', label: 'Heatmap' },
   { href: '/tasks', label: 'Audit plans' },
+  { href: '/count', label: 'Count' },
 ] as const;
+
+/** `/count/A-01-03` keeps "Count" active; the heatmap only matches `/`. */
+const isActive = (pathname: string, href: string): boolean =>
+  href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 
 export function SiteNav() {
   const pathname = usePathname();
@@ -17,7 +22,7 @@ export function SiteNav() {
         <span className="font-semibold tracking-tight">RivBins</span>
         <ul className="flex gap-4">
           {LINKS.map((link) => {
-            const active = pathname === link.href;
+            const active = isActive(pathname, link.href);
             return (
               <li key={link.href}>
                 <Link
