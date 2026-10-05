@@ -5,6 +5,7 @@ import type {
   CountSheetResponse,
   PendingTaskRef,
 } from '@rivbins/shared';
+import type { CountConfig } from './count.config.js';
 import type { CountEvaluation } from './count.evaluation.js';
 
 export interface PalletItemRow {
@@ -25,7 +26,7 @@ export interface CountSheetRow {
 
 export function toCountSheet(
   row: CountSheetRow,
-  toleranceUnits: number,
+  config: CountConfig,
 ): CountSheetResponse {
   return {
     binId: row.id,
@@ -33,7 +34,8 @@ export function toCountSheet(
     lastAuditedAt: row.lastAuditedAt?.toISOString() ?? null,
     currentScore: row.currentScore?.score ?? null,
     pendingTask: row.tasks[0] ?? null,
-    toleranceUnits,
+    toleranceUnits: config.toleranceUnits,
+    maxCountedQty: config.maxCountedQty,
     pallets: [...row.pallets]
       .sort((a, b) => a.code.localeCompare(b.code))
       .map((pallet) => ({

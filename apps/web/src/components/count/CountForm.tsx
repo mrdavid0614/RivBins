@@ -5,13 +5,21 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { saveCount, type SaveCountState } from '@/app/count/actions';
 import { formatDateTime } from '@/lib/format';
-import { formatRatio, parseCount, previewCount } from '@/lib/count';
+import { formatRatio, isTooLarge, parseCount, previewCount } from '@/lib/count';
 import { CountResult } from './CountResult';
 import { OutcomeBadge } from './OutcomeBadge';
 import { ScorePill } from './ScorePill';
 
-function DiffBadge({ expected, value }: { expected: number; value: string | undefined }) {
-  const counted = parseCount(value);
+function DiffBadge({
+  expected,
+  value,
+  max,
+}: {
+  expected: number;
+  value: string | undefined;
+  max: number;
+}) {
+  const counted = parseCount(value, max);
   if (counted === null) return <span className="w-10" />;
   const diff = counted - expected;
   return (
@@ -41,7 +49,9 @@ export function CountForm({ sheet }: { sheet: CountSheetResponse }) {
   }
 
   const lines = sheet.pallets.flatMap((pallet) => pallet.lines);
-  const remaining = lines.filter((line) => parseCount(counts[line.palletItemId]) === null).length;
+  const remaining = lines.filter(
+    (line) => parseCount(counts[line.palletItemId], sheet.maxCountedQty) === null,
+  ).length;
   const preview = previewCount(sheet, counts);
   const finalOutcome = chosen ?? preview?.autoOutcome ?? null;
   const overridden = preview !== null && finalOutcome !== preview.autoOutcome;
@@ -53,7 +63,7 @@ export function CountForm({ sheet }: { sheet: CountSheetResponse }) {
       lines: lines.map((line) => ({
         palletItemId: line.palletItemId,
         expectedQty: line.expectedQty,
-        countedQty: parseCount(counts[line.palletItemId]) ?? 0,
+        countedQty: parseCount(counts[line.palletItemId], sheet.maxCountedQty) ?? 0,
       })),
     };
     startTransition(async () => {
@@ -99,8 +109,10 @@ export function CountForm({ sheet }: { sheet: CountSheetResponse }) {
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {pallet.lines.map((line) => {
                 const id = `count-${line.palletItemId}`;
+                const value = counts[line.palletItemId];
+                const tooLarge = isTooLarge(value, sheet.maxCountedQty);
                 return (
-                  <li key={line.palletItemId} className="flex items-center gap-3 px-4 py-3">
+                  <li key={line.palletItemId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
                     <label htmlFor={id} className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{line.name}</span>
                       <span className="block text-xs text-zinc-500">
@@ -113,19 +125,26 @@ export function CountForm({ sheet }: { sheet: CountSheetResponse }) {
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      maxLength={7}
+                      maxLength={String(sheet.maxCountedQty).length}
+                      aria-invalid={tooLarge}
+                      aria-describedby={tooLarge ? `${id}-error` : undefined}
                       autoComplete="off"
                       enterKeyHint="next"
                       placeholder="0"
-                      value={counts[line.palletItemId] ?? ''}
+                      value={value ?? ''}
                       onChange={(event) => {
                         const value = event.target.value.replace(/\D/g, '');
                         setCounts((previous) => ({ ...previous, [line.palletItemId]: value }));
                       }}
                       disabled={pending}
-                      className="w-20 rounded-md border border-zinc-300 bg-white px-3 py-2 text-right text-lg tabular-nums dark:border-zinc-700 dark:bg-zinc-900"
+                      className="w-24 rounded-md border border-zinc-300 bg-white px-3 py-2 text-right text-lg tabular-nums aria-invalid:border-red-600 dark:border-zinc-700 dark:bg-zinc-900"
                     />
-                    <DiffBadge expected={line.expectedQty} value={counts[line.palletItemId]} />
+                    <DiffBadge expected={line.expectedQty} value={value} max={sheet.maxCountedQty} />
+                    {tooLarge && (
+                      <p id={`${id}-error`} className="w-full text-right text-xs text-red-700 dark:text-red-400">
+                        At most {sheet.maxCountedQty.toLocaleString('en-US')} units
+                      </p>
+                    )}
                   </li>
                 );
               })}

@@ -758,3 +758,13 @@ All decisions made during development, in chronological order.
     eligibility count checked by another file.
   - The API commits are split by layer (pure rules, then endpoints) rather than "sheet,
     then save".
+
+## D-078 — Review fix for feature 05
+- **Date:** 2026-10-05
+- **Area:** Count flow / Code review
+- **Decision:** Apply the low-severity finding from the `/code-review` of PR #13: the
+  count sheet returns `maxCountedQty` from `count.config.ts`, and the count page treats
+  a larger value as not counted yet. The line shows "At most 1,000,000 units", and Save
+  stays disabled. Before, the form accepted up to 9,999,999, and the API rejected the
+  save with a 400 naming an array index instead of the product.
+- **Alternatives considered:** A hard-coded limit in the web app.

@@ -28,6 +28,8 @@ export interface CountSheetResponse {
   pendingTask: PendingTaskRef | null;
   /** A line passes when |counted − expected| ≤ this many units (D-002). */
   toleranceUnits: number;
+  /** Largest quantity a line can be counted as; the API rejects more. */
+  maxCountedQty: number;
   /** Empty for an empty bin, which can still be counted (D-076). */
   pallets: CountSheetPallet[];
 }

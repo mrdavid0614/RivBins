@@ -54,7 +54,7 @@ export class AuditsService {
       },
     });
     if (!bin) throw new NotFoundException(`Bin ${code} not found`);
-    return toCountSheet(bin, COUNT_CONFIG.toleranceUnits);
+    return toCountSheet(bin, COUNT_CONFIG);
   }
 
   /**

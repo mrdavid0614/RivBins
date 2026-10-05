@@ -32,7 +32,7 @@ describe('toCountSheet', () => {
           { code: 'PLT-0003', items: [item(5, 'SKU-D', 0)] },
         ],
       },
-      0,
+      { toleranceUnits: 0, maxCountedQty: 500 },
     );
 
     expect(sheet).toEqual({
@@ -42,6 +42,7 @@ describe('toCountSheet', () => {
       currentScore: 71,
       pendingTask: { id: 9, planId: 2, rank: 1 },
       toleranceUnits: 0,
+      maxCountedQty: 500,
       pallets: [
         {
           code: 'PLT-0001',
@@ -85,13 +86,14 @@ describe('toCountSheet', () => {
         tasks: [],
         pallets: [],
       },
-      2,
+      { toleranceUnits: 2, maxCountedQty: 1000 },
     );
     expect(sheet).toMatchObject({
       lastAuditedAt: null,
       currentScore: null,
       pendingTask: null,
       toleranceUnits: 2,
+      maxCountedQty: 1000,
       pallets: [],
     });
   });

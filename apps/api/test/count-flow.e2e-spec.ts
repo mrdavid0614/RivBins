@@ -13,6 +13,7 @@ import type {
 } from '@rivbins/shared';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
+import { COUNT_CONFIG } from '../src/audits/count.config.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 interface BinSnapshot {
@@ -159,7 +160,8 @@ describe('Count flow (e2e)', () => {
     expect(sheet).toMatchObject({
       binId: snapshot.id,
       code: snapshot.code,
-      toleranceUnits: 0,
+      toleranceUnits: COUNT_CONFIG.toleranceUnits,
+      maxCountedQty: COUNT_CONFIG.maxCountedQty,
     });
     expect(sheet.pendingTask).toBeNull();
 
