@@ -778,3 +778,12 @@ All decisions made during development, in chronological order.
   the Release row `Done`. After `/code-review` and the PR into `main`, `main` is tagged
   `v1.0.0` and `release/1.0.0` is merged back into `develop`. The release session is not
   exported.
+
+## D-080 — Review fix for release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Code review
+- **Decision:** Apply the low-severity finding from the `/code-review` of PR #14:
+  `GET /audit-tasks` rejects a `planId` outside 1–2,147,483,647 (the INT4 range) with a
+  400. Before, a larger value passed `ParseIntPipe`, made Prisma throw, and returned a
+  500. The fix lands on `release/1.0.0` and reaches `develop` through the back-merge.
+- **Alternatives considered:** Accepting the finding as is.
