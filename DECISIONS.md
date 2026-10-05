@@ -768,3 +768,33 @@ All decisions made during development, in chronological order.
   stays disabled. Before, the form accepted up to 9,999,999, and the API rejected the
   save with a 400 naming an array index instead of the product.
 - **Alternatives considered:** A hard-coded limit in the web app.
+
+## D-079 — Release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Process / Git workflow
+- **Decision:** With features 00–05 merged into `develop`, cut `release/1.0.0` from
+  `develop`, following the last-feature exception (D-032, D-033). The branch commits
+  transcript 05 (gitleaks scan: no findings), bumps every package to `1.0.0`, and marks
+  the Release row `Done`. After `/code-review` and the PR into `main`, `main` is tagged
+  `v1.0.0` and `release/1.0.0` is merged back into `develop`. The release session is not
+  exported.
+
+## D-080 — Review fix for release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Code review
+- **Decision:** Apply the low-severity finding from the `/code-review` of PR #14:
+  `GET /audit-tasks` rejects a `planId` outside 1–2,147,483,647 (the INT4 range) with a
+  400. Before, a larger value passed `ParseIntPipe`, made Prisma throw, and returned a
+  500. The fix lands on `release/1.0.0` and reaches `develop` through the back-merge.
+- **Alternatives considered:** Accepting the finding as is.
+
+## D-081 — Second review fix for release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Web / Code review
+- **Decision:** Apply the low-severity finding from the second `/code-review` of PR #14:
+  the tasks page ignores a `?plan=` id above 2,147,483,647, like any other invalid value,
+  instead of sending it to the API and showing "Could not load audit plans". The limit
+  is a local constant in the web app that points to `MAX_PLAN_ID` in the API, because it
+  comes from the INT4 column type, not from a business rule (unlike D-078).
+- **Alternatives considered:** Treating a 400 from the tasks call as "no rows"; moving the
+  constant to `packages/shared`; accepting the finding.

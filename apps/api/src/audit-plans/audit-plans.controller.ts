@@ -20,6 +20,8 @@ import { isValidPlanSize } from './audit-plans.selection.js';
 
 export const DEFAULT_TASK_LIMIT = 100;
 export const MAX_TASK_LIMIT = 500;
+/** Largest value of a Postgres INT4 id column. */
+export const MAX_PLAN_ID = 2_147_483_647;
 
 const TASK_STATUSES: readonly TaskStatus[] = ['PENDING', 'DONE'];
 
@@ -77,6 +79,11 @@ export class AuditTasksController {
     if (limit < 1 || limit > MAX_TASK_LIMIT) {
       throw new BadRequestException(
         `limit must be between 1 and ${MAX_TASK_LIMIT}`,
+      );
+    }
+    if (planId !== undefined && (planId < 1 || planId > MAX_PLAN_ID)) {
+      throw new BadRequestException(
+        `planId must be between 1 and ${MAX_PLAN_ID}`,
       );
     }
     return this.plans.listTasks({

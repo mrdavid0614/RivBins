@@ -72,4 +72,11 @@ describe('Audit plan controllers', () => {
     );
     expect(listTasks).not.toHaveBeenCalled();
   });
+
+  it.each([0, 2_147_483_648])('rejects plan id %i', (planId) => {
+    expect(() => tasks.list(undefined, planId, 100)).toThrow(
+      BadRequestException,
+    );
+    expect(listTasks).not.toHaveBeenCalled();
+  });
 });

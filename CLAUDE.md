@@ -150,7 +150,7 @@ the Release row (R) has no transcript.
 | 03 | Heatmap dashboard + bin detail                      | `03-heatmap`       | Done     |
 | 04 | Audit plans + tasks                                 | `04-audit-plans`   | Done     |
 | 05 | Mobile count flow                                   | `05-count-flow`    | Done     |
-| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Next     |
+| R  | Release 1.0.0: commit transcript 05, merge to `main`, tag `v1.0.0` | not exported | Done     |
 
 ## Project Structure
 
