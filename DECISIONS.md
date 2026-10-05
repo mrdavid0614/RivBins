@@ -672,3 +672,13 @@ All decisions made during development, in chronological order.
   count is checked inside the plan transaction, under the advisory lock.
 - **Alternatives considered:** A fixed 1–100 range that creates fewer than N tasks
   when not enough bins are eligible (the original proposal).
+
+## D-070 — Implementation adjustments in feature 04
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Web
+- **Decision:** Small changes to the approved plan (D-067), made during implementation:
+  - The plan creation and listing endpoints ship in one commit instead of two.
+  - The tasks table also filters by plan (`/tasks?plan=3`): plan numbers in the table and
+    the drawer's pending-task line link to it.
+  - `apiFetch` throws the API's error `message`, so the form shows why a plan was
+    rejected (N above the eligible bins, or none eligible).

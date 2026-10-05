@@ -155,17 +155,35 @@ grid per rack (top shelf first). Bins are colored by their current score:
 Click a bin to open its detail drawer (`/?bin=A-01-03`, shareable). It shows the current
 score with the per-factor breakdown, the score history with the trigger of each change,
 the last audit date, and the pallets in the bin with their product lines. "Recompute
-scores" rescores every bin and refreshes the heatmap.
+scores" rescores every bin and refreshes the heatmap. A blue dot marks bins with a
+pending audit task.
+
+## Audit plans and tasks
+
+The tasks page (`http://localhost:3000/tasks`) generates audit plans. Enter **N** and
+"Generate audit plan" creates a plan with the N riskiest bins by current score (ties by
+bin code), skipping bins that already have a `PENDING` task. Only scored bins without a
+pending task are eligible, and N must be between 1 and the number of eligible bins; with
+none eligible, no plan is created. Existing pending tasks are never changed: a task
+becomes `DONE` when its bin is counted.
+
+The tasks table shows each task's plan, rank, bin, score when the plan was created,
+current score, status, and dates. Filter it by status (`/tasks?status=pending`) or by
+plan (`/tasks?plan=3`).
 
 ## API
 
 | Method | Path | Returns |
 |--------|------|---------|
 | `GET` | `/health` | API and database status |
-| `GET` | `/warehouse/layout` | Aisles → racks → bins with each bin's current score |
+| `GET` | `/warehouse/layout` | Aisles → racks → bins with each bin's current score and pending task |
 | `GET` | `/bins/:code` | Bin detail: location, last audit, current score with breakdown, pallets (404 if unknown) |
 | `GET` | `/bins/:code/scores?limit=20` | Score history, newest first (`limit` 1–100, default 20) |
 | `POST` | `/scoring/recompute` | Rescores every bin; returns `{ trigger, binsRecomputed, computedAt }` |
+| `GET` | `/audit-plans/eligibility` | `{ eligibleBins }`: scored bins without a pending task |
+| `POST` | `/audit-plans` | Body `{ n }`: creates a plan with the Top N eligible bins (400 if N is out of range, 409 if none are eligible) |
+| `GET` | `/audit-plans` | Plan summaries with task counts, newest first |
+| `GET` | `/audit-tasks?status=&planId=&limit=100` | Tasks, newest plan first then by rank (`status` `PENDING`/`DONE`, `limit` 1–500) |
 
 Bin codes are matched case-insensitively.
 
