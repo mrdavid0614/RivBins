@@ -6,6 +6,8 @@ import { apiFetch } from '@/lib/api';
 
 /** Rows the table asks for; the API's own default is the same (D-067). */
 const TASKS_LIMIT = 100;
+/** Largest plan id the API accepts (INT4, MAX_PLAN_ID in the audit-plans controller). */
+const MAX_PLAN_ID = 2_147_483_647;
 
 function parseStatus(value: string | string[] | undefined): TaskStatus | null {
   if (value === 'pending') return 'PENDING';
@@ -15,7 +17,7 @@ function parseStatus(value: string | string[] | undefined): TaskStatus | null {
 
 function parsePlanId(value: string | string[] | undefined): number | null {
   const id = typeof value === 'string' ? Number(value) : Number.NaN;
-  return Number.isInteger(id) && id > 0 ? id : null;
+  return Number.isInteger(id) && id > 0 && id <= MAX_PLAN_ID ? id : null;
 }
 
 async function loadTasksPage(
