@@ -4,6 +4,9 @@ import { TaskFilters } from '@/components/audit-plans/TaskFilters';
 import { TasksTable } from '@/components/audit-plans/TasksTable';
 import { apiFetch } from '@/lib/api';
 
+/** Rows the table asks for; the API's own default is the same (D-067). */
+const TASKS_LIMIT = 100;
+
 function parseStatus(value: string | string[] | undefined): TaskStatus | null {
   if (value === 'pending') return 'PENDING';
   if (value === 'done') return 'DONE';
@@ -19,7 +22,7 @@ async function loadTasksPage(
   status: TaskStatus | null,
   planId: number | null,
 ): Promise<{ eligibility: AuditPlanEligibility; tasks: AuditTaskRow[] } | null> {
-  const query = new URLSearchParams();
+  const query = new URLSearchParams({ limit: String(TASKS_LIMIT) });
   if (status) query.set('status', status);
   if (planId !== null) query.set('planId', String(planId));
   try {
@@ -58,6 +61,11 @@ export default async function TasksPage(props: PageProps<'/tasks'>) {
             <h2 className="text-lg font-semibold">Tasks</h2>
             <TaskFilters status={status} planId={planId} />
             <TasksTable tasks={data.tasks} />
+            {data.tasks.length === TASKS_LIMIT && (
+              <p className="text-xs text-zinc-500">
+                Showing the {TASKS_LIMIT} most recent tasks. Filter by status or plan to see older ones.
+              </p>
+            )}
           </section>
         </>
       ) : (
