@@ -768,3 +768,13 @@ All decisions made during development, in chronological order.
   stays disabled. Before, the form accepted up to 9,999,999, and the API rejected the
   save with a 400 naming an array index instead of the product.
 - **Alternatives considered:** A hard-coded limit in the web app.
+
+## D-079 — Release 1.0.0
+- **Date:** 2026-10-05
+- **Area:** Process / Git workflow
+- **Decision:** With features 00–05 merged into `develop`, cut `release/1.0.0` from
+  `develop`, following the last-feature exception (D-032, D-033). The branch commits
+  transcript 05 (gitleaks scan: no findings), bumps every package to `1.0.0`, and marks
+  the Release row `Done`. After `/code-review` and the PR into `main`, `main` is tagged
+  `v1.0.0` and `release/1.0.0` is merged back into `develop`. The release session is not
+  exported.
