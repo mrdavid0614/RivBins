@@ -1,3 +1,4 @@
+import type { PendingTaskRef } from './audit-plans.js';
 import type { ScoreTrigger } from './enums.js';
 import type { FactorBreakdown } from './scoring.js';
 
@@ -15,6 +16,8 @@ export interface HeatmapBin {
   score: number | null;
   scoreComputedAt: string | null;
   lastAuditedAt: string | null;
+  /** The bin's open audit task; null when it has none. */
+  pendingTask: PendingTaskRef | null;
 }
 
 export interface HeatmapRack {
@@ -66,6 +69,8 @@ export interface BinDetailResponse {
   position: number;
   lastAuditedAt: string | null;
   currentScore: CurrentScore | null;
+  /** The bin's open audit task; null when it has none. */
+  pendingTask: PendingTaskRef | null;
   pallets: BinPallet[];
 }
 

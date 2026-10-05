@@ -27,6 +27,7 @@ const row: BinDetailRow = {
     computedAt: new Date('2026-10-04T08:00:00Z'),
     factors,
   },
+  tasks: [],
   pallets: [
     {
       code: 'PLT-0002',
@@ -41,6 +42,12 @@ const row: BinDetailRow = {
 };
 
 describe('toBinDetail', () => {
+  it('exposes the pending task, or null without one', () => {
+    expect(toBinDetail(row).pendingTask).toBeNull();
+    const task = { id: 3, planId: 1, rank: 2 };
+    expect(toBinDetail({ ...row, tasks: [task] }).pendingTask).toEqual(task);
+  });
+
   it('maps location, last audit, and the stored breakdown as is', () => {
     const detail = toBinDetail(row);
     expect(detail).toMatchObject({

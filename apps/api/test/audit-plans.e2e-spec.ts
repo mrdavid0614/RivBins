@@ -8,6 +8,8 @@ import type {
   AuditPlanResponse,
   AuditPlanSummary,
   AuditTaskRow,
+  BinDetailResponse,
+  WarehouseLayoutResponse,
 } from '@rivbins/shared';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
@@ -91,6 +93,30 @@ describe('Audit plans (e2e)', () => {
         completedAt: null,
       });
     }
+  });
+
+  it('the heatmap and the bin detail show the pending task', async () => {
+    const task = await prisma.auditTask.findFirstOrThrow({
+      where: { status: 'PENDING', planId: { gt: lastPlanIdBefore } },
+      select: {
+        id: true,
+        planId: true,
+        rank: true,
+        bin: { select: { code: true } },
+      },
+    });
+    const ref = { id: task.id, planId: task.planId, rank: task.rank };
+
+    const layout = (await http().get('/warehouse/layout').expect(200))
+      .body as WarehouseLayoutResponse;
+    const cell = layout.aisles
+      .flatMap((a) => a.racks.flatMap((r) => r.bins))
+      .find((b) => b.code === task.bin.code);
+    expect(cell?.pendingTask).toEqual(ref);
+
+    const detail = (await http().get(`/bins/${task.bin.code}`).expect(200))
+      .body as BinDetailResponse;
+    expect(detail.pendingTask).toEqual(ref);
   });
 
   it('a new plan skips bins with a pending task and takes the next riskiest (D-006)', async () => {

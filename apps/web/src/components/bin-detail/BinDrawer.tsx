@@ -1,4 +1,5 @@
 import type { BinDetailResponse, ScoreHistoryEntry } from '@rivbins/shared';
+import { PendingMarker } from '@/components/heatmap/RackGrid';
 import { ApiError, apiFetch } from '@/lib/api';
 import { formatAge, formatDateTime } from '@/lib/format';
 import { BAND_STYLES, scoreBand } from '@/lib/score-bands';
@@ -67,6 +68,12 @@ export async function BinDrawer({ code }: { code: string }) {
               <span className="text-zinc-500">never audited</span>
             )}
           </p>
+          {bin.pendingTask && (
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-sky-700 dark:text-sky-300">
+              <PendingMarker />
+              Pending audit task · plan #{bin.pendingTask.planId}, rank {bin.pendingTask.rank}
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className={`rounded-lg px-3 py-1.5 text-2xl font-bold tabular-nums ${band.cell}`}>

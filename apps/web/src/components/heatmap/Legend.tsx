@@ -1,4 +1,5 @@
 import { BAND_STYLES, LEGEND_BANDS } from '@/lib/score-bands';
+import { PendingMarker } from './RackGrid';
 
 export function Legend() {
   return (
@@ -10,6 +11,10 @@ export function Legend() {
           {band !== 'none' && <span className="text-zinc-400">({BAND_STYLES[band].range})</span>}
         </li>
       ))}
+      <li className="flex items-center gap-1.5">
+        <PendingMarker />
+        Pending audit task
+      </li>
     </ul>
   );
 }

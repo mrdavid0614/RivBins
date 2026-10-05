@@ -13,6 +13,7 @@ const bin = (
   lastAuditedAt: id === 1 ? new Date('2026-09-20T10:00:00Z') : null,
   currentScore:
     score === null ? null : { score, computedAt: new Date('2026-10-04T00:00:00Z') },
+  tasks: id === 1 ? [{ id: 5, planId: 2, rank: 1 }] : [],
 });
 
 describe('toWarehouseLayout', () => {
@@ -68,7 +69,13 @@ describe('toWarehouseLayout', () => {
       score: 80,
       scoreComputedAt: '2026-10-04T00:00:00.000Z',
       lastAuditedAt: '2026-09-20T10:00:00.000Z',
+      pendingTask: { id: 5, planId: 2, rank: 1 },
     });
-    expect(unscored).toMatchObject({ score: null, scoreComputedAt: null, lastAuditedAt: null });
+    expect(unscored).toMatchObject({
+      score: null,
+      scoreComputedAt: null,
+      lastAuditedAt: null,
+      pendingTask: null,
+    });
   });
 });

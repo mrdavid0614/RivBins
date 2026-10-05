@@ -68,14 +68,27 @@ function BinCell({ bin, selected }: { bin: HeatmapBin; selected: boolean }) {
     <Link
       href={`/?bin=${encodeURIComponent(bin.code)}`}
       scroll={false}
-      aria-label={`Bin ${bin.code}, score ${bin.score ?? 'not computed'}`}
+      aria-label={`Bin ${bin.code}, score ${bin.score ?? 'not computed'}${
+        bin.pendingTask ? ', pending audit task' : ''
+      }`}
       aria-current={selected ? 'true' : undefined}
-      className={`flex aspect-[4/3] flex-col items-center justify-center rounded-md transition ${style.cell} ${
+      className={`relative flex aspect-[4/3] flex-col items-center justify-center rounded-md transition ${style.cell} ${
         selected ? 'ring-2 ring-zinc-900 ring-offset-2 dark:ring-zinc-100 dark:ring-offset-zinc-950' : ''
       }`}
     >
+      {bin.pendingTask && <PendingMarker className="absolute top-1 right-1" />}
       <span className="text-lg font-semibold leading-none tabular-nums">{bin.score ?? '—'}</span>
       <span className="mt-1 text-[10px] font-medium opacity-90">{bin.code}</span>
     </Link>
+  );
+}
+
+/** Marks a bin with a PENDING audit task (D-067). */
+export function PendingMarker({ className = '' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`size-2.5 rounded-full bg-sky-500 ring-2 ring-white dark:ring-zinc-950 ${className}`}
+    />
   );
 }

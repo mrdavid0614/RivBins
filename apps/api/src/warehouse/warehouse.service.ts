@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { WarehouseLayoutResponse } from '@rivbins/shared';
+import { PENDING_TASK_SELECT } from '../audit-plans/pending-task.select.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toWarehouseLayout } from './warehouse.mapper.js';
 
@@ -30,6 +31,7 @@ export class WarehouseService {
                     position: true,
                     lastAuditedAt: true,
                     currentScore: { select: { score: true, computedAt: true } },
+                    tasks: PENDING_TASK_SELECT,
                   },
                 },
               },
