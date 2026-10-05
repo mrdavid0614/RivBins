@@ -682,3 +682,13 @@ All decisions made during development, in chronological order.
     the drawer's pending-task line link to it.
   - `apiFetch` throws the API's error `message`, so the form shows why a plan was
     rejected (N above the eligible bins, or none eligible).
+
+## D-071 — Review fixes for feature 04
+- **Date:** 2026-10-05
+- **Area:** Audit plans / Code review
+- **Decision:** Apply both low-severity findings from the `/code-review` of PR #12:
+  - `GET /audit-tasks` rejects a repeated `status` parameter (an array) with `400`
+    instead of failing with `500`.
+  - The tasks page asks for an explicit limit of 100 rows and says so when the list is
+    cut off ("Showing the 100 most recent tasks"), instead of silently hiding older tasks.
+- **Alternatives considered:** Pagination for the tasks table (out of scope per D-067).

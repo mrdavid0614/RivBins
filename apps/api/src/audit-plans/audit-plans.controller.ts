@@ -55,12 +55,16 @@ export class AuditTasksController {
   /** Tasks table, optionally filtered by status and plan. */
   @Get()
   list(
-    @Query('status') status: string | undefined,
+    @Query('status') status: unknown,
     @Query('planId', new ParseIntPipe({ optional: true }))
     planId: number | undefined,
     @Query('limit', new DefaultValuePipe(DEFAULT_TASK_LIMIT), ParseIntPipe)
     limit: number,
   ): Promise<AuditTaskRow[]> {
+    // A repeated ?status= arrives as an array.
+    if (status !== undefined && typeof status !== 'string') {
+      throw new BadRequestException('status must be a single value');
+    }
     const normalized = status?.toUpperCase();
     if (
       normalized !== undefined &&

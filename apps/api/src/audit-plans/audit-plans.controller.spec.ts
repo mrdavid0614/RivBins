@@ -59,6 +59,13 @@ describe('Audit plan controllers', () => {
     );
   });
 
+  it('rejects a repeated status', () => {
+    expect(() => tasks.list(['PENDING', 'DONE'], undefined, 100)).toThrow(
+      BadRequestException,
+    );
+    expect(listTasks).not.toHaveBeenCalled();
+  });
+
   it.each([0, 501])('rejects limit %i', (limit) => {
     expect(() => tasks.list(undefined, undefined, limit)).toThrow(
       BadRequestException,
