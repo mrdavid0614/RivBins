@@ -798,3 +798,11 @@ All decisions made during development, in chronological order.
   comes from the INT4 column type, not from a business rule (unlike D-078).
 - **Alternatives considered:** Treating a 400 from the tasks call as "no rows"; moving the
   constant to `packages/shared`; accepting the finding.
+
+## D-082 — Delete the 1.0.0 release branch
+- **Date:** 2026-10-05
+- **Area:** Process / Git workflow
+- **Decision:** After `release/1.0.0` merged into `main` (tag `v1.0.0`, PR #14) and back
+  into `develop` (PR #15), delete the branch locally and on `origin`. The tag keeps the
+  release reachable. `release/0.2.0` is left as it is.
+- **Alternatives considered:** Keeping the branch, as was done for 0.2.0.
