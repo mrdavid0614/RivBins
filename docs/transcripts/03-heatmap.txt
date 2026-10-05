@@ -1,0 +1,1612 @@
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Opus 5.5 · Claude Pro
+ ▝▝   ▝▝   ~/Desktop/projects/RivBins
+
+
+❯ /clear                                                                        
+
+❯ start 03-heatmap                                                              
+
+  Searched for 1 pattern, ran 4 shell commands (ctrl+o to expand)
+
+⏺ Status update: I read DECISIONS.md (latest is D-059), the Roadmap, the Prisma
+  schema, the shared types, the scoring module, and the web scaffold. Feature 03
+  is Next. Below is the plan. I haven't written any code yet.
+
+  Plan: Feature 03, heatmap dashboard and bin detail
+
+  Scope
+
+  Included
+  - A heatmap of all 36 bins, grouped by aisle → rack, with each rack drawn as a
+    level × position grid. Each cell is colored by its current score.
+  - A "Recompute scores" button. It calls the existing POST /scoring/recompute,
+    then the heatmap reloads.
+  - A bin detail drawer with:
+    - the current score and the factor breakdown (raw value, threshold,
+      normalized value, weight, points; factor 5 shown as a %, per D-052)
+    - the score history timeline, with the trigger for each change and the score
+      delta
+    - the last audit date
+    - the pallets in the bin, with their product lines and quantities
+
+  Not included
+  - Searching a bin by code and the count flow (feature 05)
+  - Pending-task badges and audit plans (feature 04)
+  - Live updates or polling
+
+  API changes (NestJS)
+
+  Method: GET
+  Path: /warehouse/layout
+  Response: { warehouse: {code,name}, aisles: [{code, racks: [{code, levels, 
+  positions, bins: [{id, code, level, position, score: number|null, 
+  scoreComputedAt, lastAuditedAt}]}]}] }, sorted by position/level/position
+  ────────────────────────────────────────
+  Method: GET
+  Path: /bins/:code
+  Response: { id, code, aisle, rack, level, position, lastAuditedAt, 
+  currentScore: {score, trigger, computedAt, factors:  FactorBreakdown[]} | 
+  null, pallets: [{code, items: [{sku, name,  quantity}]}] }, or 404
+  ────────────────────────────────────────
+  Method: GET
+  Path: /bins/:code/scores?limit=20
+  Response: [{id, score, trigger, auditResultId, computedAt}], newest first
+
+  - New modules warehouse/ and bins/, each with a controller, a service, and a
+    pure mapper (Prisma rows → contract shape).
+  - packages/shared: add WarehouseLayoutResponse, BinDetailResponse, and
+    ScoreHistoryEntry (types only).
+  - No schema changes and no migration.
+
+  Web changes (Next.js 16)
+
+  - page.tsx stays a server component. It fetches the layout through apiFetch,
+    so the API stays server-side only (API_URL).
+  - The drawer opens through a URL search parameter, /?bin=A-01-03. It's
+    rendered on the server, so the URL can be shared, and the drawer closes with
+    a link that drops the parameter.
+  - Recompute is a server action: it calls the API, then revalidatePath('/'),
+    and the button shows a pending state.
+  - Components: Heatmap, RackGrid, BinCell, BinDrawer, FactorBreakdownTable,
+    ScoreHistory, PalletList, and RecomputeButton (client). Plus
+    lib/score-bands.ts for the color bands and a legend.
+  - Before writing anything, I'll read the Next 16 docs in
+    node_modules/next/dist/docs/ on server actions and searchParams, as
+    AGENTS.md requires.
+
+  Business rules applied
+
+  - The heatmap color is based only on the current score. It goes green → yellow
+    → red, and bins with no score are gray.
+  - The breakdown shows the threshold and weight stored on each row, not the
+    current config, so old scores stay explainable.
+  - History is read from the append-only BinScore table and is never changed.
+
+  Tests
+
+  - Unit (Vitest): the layout mapper (grouping and sorting, bins with no score),
+    the detail mapper (excludes lines with quantity 0? see Q5), and history
+    ordering and limit.
+  - e2e (seeded DB): layout returns 36 bins in 3×2 racks. /bins/A-01-01 returns
+    6 factors whose points add up to the score. Unknown code returns 404.
+    History is newest-first and respects limit.
+  - Web: typecheck, lint, and a manual run of the app with a screenshot. There's
+    no web test runner (D-022 covers only the API).
+
+  Branch and commits (feature/heatmap-dashboard)
+
+  1. docs(transcripts): add 02-scoring session transcript, only after the
+     gitleaks scan passes
+  2. docs(repo): record the feature 03 plan
+  3. feat(shared): add heatmap and bin detail contract types
+  4. feat(api): add warehouse layout endpoint
+  5. feat(api): add bin detail and score history endpoints
+  6. feat(heatmap): add heatmap grid with recompute action
+  7. feat(heatmap): add bin detail drawer
+  8. docs(repo): document heatmap endpoints and update the roadmap, which marks
+     03 Done and 04 Next
+
+  Open questions
+
+  1. Color bands: three fixed bands, 0–39 green, 40–69 yellow, 70–100 red (my
+     recommendation, and the legend stays simple)? Or a continuous gradient?
+  2. Bin identifier in the API: the bin code (/bins/A-01-03, which feature 05's
+     search can reuse) or the numeric id?
+  3. History length: last 20 rows by default (recommended, since every recompute
+     adds a row), or the full history?
+  4. Drawer: server-rendered from ?bin= (recommended), or a client drawer that
+     fetches its own data?
+  5. Pallet lines with quantity 0: hide them in the drawer, like factor 6 does
+     (D-055), or show them dimmed?
+
+  Do you approve the plan, and what are your answers to Q1–Q5?
+
+✻ Brewed for 51s · done 1:37 AM
+
+❯ approved, go with your recommendations on all five                            
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+⏺ Now I'll record the decisions.
+
+⏺ Bash(cat >> DECISIONS.md <<'EOF'…)
+  ⎿  22cab05 docs(repo): record the feature 03 plan
+  ⎿  Updated DECISIONS.md (+51 -0)
+      567    The Release row (`v1.0.0`) stays planned after feature 05.
+      568  - **Alternatives considered:** A direct `develop` → `main` PR 
+           as a one-time exception to
+      569    the git-flow rule; waiting for `v1.0.0`.
+      570 +                                                              
+      571 +## D-060 — Feature 03 plan: heatmap dashboard and bin detail  
+      572 +- **Date:** 2026-10-04                                        
+      573 +- **Area:** Heatmap / API / Process                           
+      574 +- **Decision:** Approve the plan for feature 03 (`feature/heat
+          +map-dashboard`):                                              
+      575 +  - `GET /warehouse/layout` returns aisles → racks → bins with
+          + each bin's current score.                                    
+      576 +  - `GET /bins/:code` returns the bin detail (location, last a
+          +udit, current score with                                      
+      577 +    its factor breakdown, pallets and lines). `GET /bins/:code
+          +/scores?limit=` returns                                       
+      578 +    the score history, newest first.                          
+      579 +  - Contract types live in `@rivbins/shared`; the API maps Pri
+          +sma rows with pure,                                           
+      580 +    unit-tested mappers; e2e tests run against the seeded data
+          +base.                                                         
+      581 +  - The web page stays a server component; "Recompute scores" 
+          +is a server action that                                       
+      582 +    calls `POST /scoring/recompute` and revalidates the page. 
+      583 +  - Out of scope: bin search/count flow (05), pending-task bad
+          +ges (04), live updates.                                       
+      584 +                                                              
+      585 +## D-061 — Heatmap color bands                                
+      586 +- **Date:** 2026-10-04                                        
+      587 +- **Area:** Heatmap                                           
+      588 +- **Decision:** Three fixed bands: 0–39 green (low), 40–69 yel
+          +low (medium), 70–100 red                                      
+      589 +  (high). Bins with no score are gray. A legend shows the band
+          +s.                                                            
+      590 +- **Alternatives considered:** A continuous green → red gradie
+          +nt.                                                           
+      591 +                                                              
+      592 +## D-062 — Bins are addressed by code in the API              
+      593 +- **Date:** 2026-10-04                                        
+      594 +- **Area:** API                                               
+      595 +- **Decision:** Bin detail and history use the human-readable 
+          +code                                                          
+      596 +  (`/bins/A-01-03`), so feature 05's search/scan can reuse the
+          + same endpoint.                                               
+      597 +- **Alternatives considered:** The numeric id.                
+      598 +                                                              
+      599 +## D-063 — Score history defaults to the last 20 rows         
+      600 +- **Date:** 2026-10-04                                        
+      601 +- **Area:** API / Heatmap                                     
+      602 +- **Decision:** `GET /bins/:code/scores` returns the newest 20
+          + rows by default, with an                                     
+      603 +  optional `limit` (1–100). Every recompute appends a row per 
+          +bin, so the full history                                      
+      604 +  grows without bound.                                        
+      605 +- **Alternatives considered:** Always returning the full histo
+          +ry.                                                           
+      606 +                                                              
+     … 14 more lines (ctrl+o to expand)
+
+⏺ Next, the shared types. First I'll look at how existing API code and specs are
+  structured.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Bash(cat > packages/shared/src/heatmap.ts <<'EOF'
+      import type { ScoreTrigger } from './enums.js';…)
+  ⎿   WARN  Issue while reading "/Users/raymonddavidmoramontero/.npmrc". Fa
+     iled to replace env in config: ${GCP_PROJECT_ID}
+     .                                        |  WARN  Unsupported engine:
+     … +8 lines (ctrl+o to expand)
+  ⎿  Created packages/shared/src/heatmap.ts (+80 -0)
+       1 +import type { ScoreTrigger } from './enums.js';                
+       2 +import type { FactorBreakdown } from './scoring.js';           
+       3 +                                                               
+       4 +// Dates are ISO 8601 strings: the API serializes them with JSO
+         +N.                                                             
+       5 +                                                               
+       6 +/** One cell of the heatmap. */                                
+       7 +export interface HeatmapBin {                                  
+       8 +  id: number;                                                  
+       9 +  code: string;                                                
+      10 +  /** Grid row (shelf height), 1 = floor level. */             
+      11 +  level: number;                                               
+      12 +  /** Grid column. */                                          
+      13 +  position: number;                                            
+      14 +  /** Current 0–100 score; null when the bin was never scored. 
+         +*/                                                             
+      15 +  score: number | null;                                        
+      16 +  scoreComputedAt: string | null;                              
+      17 +  lastAuditedAt: string | null;                                
+      18 +}                                                              
+      19 +                                                               
+      20 +export interface HeatmapRack {                                 
+      21 +  code: string;                                                
+      22 +  /** Highest level in the rack: the grid's row count. */      
+      23 +  levels: number;                                              
+      24 +  /** Highest position in the rack: the grid's column count. */
+      25 +  positions: number;                                           
+      26 +  bins: HeatmapBin[];                                          
+      27 +}                                                              
+      28 +                                                               
+      29 +export interface HeatmapAisle {                                
+      30 +  code: string;                                                
+      31 +  racks: HeatmapRack[];                                        
+      32 +}                                                              
+      33 +                                                               
+      34 +/** Response of GET /warehouse/layout (D-060). */              
+      35 +export interface WarehouseLayoutResponse {                     
+      36 +  warehouse: { code: string; name: string };                   
+      37 +  aisles: HeatmapAisle[];                                      
+      38 +}                                                              
+      39 +                                                               
+      40 +export interface CurrentScore {                                
+     … 40 more lines (ctrl+o to expand)
+  ⎿  Updated packages/shared/src/index.ts (+1 -0)
+      1  export * from './enums.js';
+      2  export * from './scoring.js';
+      3 +export * from './heatmap.js';                                   
+
+⏺ Now the warehouse layout module:
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/api/src
+      && mkdir -p warehouse bins && cat > warehouse/warehouse.mapper.ts <<'EOF'
+      // Pure mappin…)
+  ⎿  78:    expect(factors.map((f) => f.key)).toEqual(FACTOR_ORDER);
+     119:      expect(factor({ activityCount: 30 }, 'activitySinceLastAudit
+     ')).toMatchObject({
+     … +2 lines (ctrl+o to expand)
+  ⎿  Created apps/api/src/warehouse/warehouse.controller.ts (+14 -0)
+       1 +import { Controller, Get } from '@nestjs/common';              
+       2 +import type { WarehouseLayoutResponse } from '@rivbins/shared';
+       3 +import { WarehouseService } from './warehouse.service.js';     
+       4 +                                                               
+       5 +@Controller('warehouse')                                       
+       6 +export class WarehouseController {                             
+       7 +  constructor(private readonly warehouse: WarehouseService) {} 
+       8 +                                                               
+       9 +  /** Aisles → racks → bins with current scores, for the heatma
+         +p (D-060). */                                                  
+      10 +  @Get('layout')                                               
+      11 +  layout(): Promise<WarehouseLayoutResponse> {                 
+      12 +    return this.warehouse.getLayout();                         
+      13 +  }                                                            
+      14 +}                                                              
+  ⎿  Created apps/api/src/warehouse/warehouse.mapper.spec.ts (+74 -0)
+       1 +import { toWarehouseLayout, type LayoutRow } from './warehouse.
+         +mapper.js';                                                    
+       2 +                                                               
+       3 +const bin = (                                                  
+       4 +  id: number,                                                  
+       5 +  level: number,                                               
+       6 +  position: number,                                            
+       7 +  score: number | null,                                        
+       8 +): LayoutRow['aisles'][number]['racks'][number]['bins'][number]
+         + => ({                                                         
+       9 +  id,                                                          
+      10 +  code: `B-${id}`,                                             
+      11 +  level,                                                       
+      12 +  position,                                                    
+      13 +  lastAuditedAt: id === 1 ? new Date('2026-09-20T10:00:00Z') : 
+         +null,                                                          
+      14 +  currentScore:                                                
+      15 +    score === null ? null : { score, computedAt: new Date('2026
+         +-10-04T00:00:00Z') },                                          
+      16 +});                                                            
+      17 +                                                               
+      18 +describe('toWarehouseLayout', () => {                          
+      19 +  const row: LayoutRow = {                                     
+      20 +    code: 'WH1',                                               
+      21 +    name: 'Main',                                              
+      22 +    aisles: [                                                  
+      23 +      {                                                        
+      24 +        code: 'B',                                             
+      25 +        position: 2,                                           
+      26 +        racks: [{ code: '01', position: 1, bins: [bin(9, 1, 1, 
+         +10)] }],                                                       
+      27 +      },                                                       
+      28 +      {                                                        
+      29 +        code: 'A',                                             
+      30 +        position: 1,                                           
+      31 +        racks: [                                               
+      32 +          { code: '02', position: 2, bins: [] },               
+      33 +          {                                                    
+      34 +            code: '01',                                        
+      35 +            position: 1,                                       
+      36 +            bins: [bin(2, 1, 2, 50), bin(1, 1, 1, 80), bin(3, 2
+         +, 3, null)],                                                   
+      37 +          },                                                   
+      38 +        ],                                                     
+      39 +      },                                                       
+      40 +    ],                                                         
+     … 34 more lines (ctrl+o to expand)
+  ⎿  Created apps/api/src/warehouse/warehouse.mapper.ts (+56 -0)
+       1 +// Pure mapping from Prisma rows to the GET /warehouse/layout c
+         +ontract.                                                       
+       2 +import type { WarehouseLayoutResponse } from '@rivbins/shared';
+       3 +                                                               
+       4 +export interface LayoutRow {                                   
+       5 +  code: string;                                                
+       6 +  name: string;                                                
+       7 +  aisles: {                                                    
+       8 +    code: string;                                              
+       9 +    position: number;                                          
+      10 +    racks: {                                                   
+      11 +      code: string;                                            
+      12 +      position: number;                                        
+      13 +      bins: {                                                  
+      14 +        id: number;                                            
+      15 +        code: string;                                          
+      16 +        level: number;                                         
+      17 +        position: number;                                      
+      18 +        lastAuditedAt: Date | null;                            
+      19 +        currentScore: { score: number; computedAt: Date } | nul
+         +l;                                                             
+      20 +      }[];                                                     
+      21 +    }[];                                                       
+      22 +  }[];                                                         
+      23 +}                                                              
+      24 +                                                               
+      25 +const byPosition = (a: { position: number }, b: { position: num
+         +ber }): number =>                                              
+      26 +  a.position - b.position;                                     
+      27 +                                                               
+      28 +/**                                                            
+      29 + * Sorts aisles and racks by display position and bins top shel
+         +f first, so the                                                
+      30 + * grid reads like the physical rack. Grid size comes from the 
+         +highest level and                                              
+      31 + * position, so gaps in a rack stay visible.                   
+      32 + */                                                            
+      33 +export function toWarehouseLayout(row: LayoutRow): WarehouseLay
+         +outResponse {                                                  
+      34 +  return {                                                     
+      35 +    warehouse: { code: row.code, name: row.name },             
+      36 +    aisles: [...row.aisles].sort(byPosition).map((aisle) => ({ 
+      37 +      code: aisle.code,                                        
+      38 +      racks: [...aisle.racks].sort(byPosition).map((rack) => ({
+      39 +        code: rack.code,                                       
+      40 +        levels: Math.max(0, ...rack.bins.map((b) => b.level)), 
+     … 16 more lines (ctrl+o to expand)
+  ⎿  Created apps/api/src/warehouse/warehouse.module.ts (+9 -0)
+      1 +import { Module } from '@nestjs/common';                        
+      2 +import { WarehouseController } from './warehouse.controller.js';
+      3 +import { WarehouseService } from './warehouse.service.js';      
+      4 +                                                                
+      5 +@Module({                                                       
+      6 +  controllers: [WarehouseController],                           
+      7 +  providers: [WarehouseService],                                
+      8 +})                                                              
+      9 +export class WarehouseModule {}                                 
+  ⎿  Created apps/api/src/warehouse/warehouse.service.ts (+44 -0)
+       1 +import { Injectable, NotFoundException } from '@nestjs/common';
+       2 +import type { WarehouseLayoutResponse } from '@rivbins/shared';
+       3 +import { PrismaService } from '../prisma/prisma.service.js';   
+       4 +import { toWarehouseLayout } from './warehouse.mapper.js';     
+       5 +                                                               
+       6 +@Injectable()                                                  
+       7 +export class WarehouseService {                                
+       8 +  constructor(private readonly prisma: PrismaService) {}       
+       9 +                                                               
+      10 +  /** The heatmap layout of the (single) warehouse with each bi
+         +n's current score. */                                          
+      11 +  async getLayout(): Promise<WarehouseLayoutResponse> {        
+      12 +    const warehouse = await this.prisma.warehouse.findFirst({  
+      13 +      orderBy: { id: 'asc' },                                  
+      14 +      select: {                                                
+      15 +        code: true,                                            
+      16 +        name: true,                                            
+      17 +        aisles: {                                              
+      18 +          select: {                                            
+      19 +            code: true,                                        
+      20 +            position: true,                                    
+      21 +            racks: {                                           
+      22 +              select: {                                        
+      23 +                code: true,                                    
+      24 +                position: true,                                
+      25 +                bins: {                                        
+      26 +                  select: {                                    
+      27 +                    id: true,                                  
+      28 +                    code: true,                                
+      29 +                    level: true,                               
+      30 +                    position: true,                            
+      31 +                    lastAuditedAt: true,                       
+      32 +                    currentScore: { select: { score: true, comp
+         +utedAt: true } },                                              
+      33 +                  },                                           
+      34 +                },                                             
+      35 +              },                                               
+      36 +            },                                                 
+      37 +          },                                                   
+      38 +        },                                                     
+      39 +      },                                                       
+      40 +    });                                                        
+     … 4 more lines (ctrl+o to expand)
+
+⏺ Now the bins module (detail and history):
+
+⏺ Bash(cat > bins/bins.mapper.ts <<'EOF'
+      // Pure mapping from Prisma rows to the GET /bins/:code and
+      /bins/:code/scores contracts.…)
+  ⎿  Created apps/api/src/bins/bins.controller.spec.ts (+35 -0)
+       1 +import { BadRequestException } from '@nestjs/common';          
+       2 +import { Test } from '@nestjs/testing';                        
+       3 +import { BinsController } from './bins.controller.js';         
+       4 +import { BinsService } from './bins.service.js';               
+       5 +                                                               
+       6 +describe('BinsController', () => {                             
+       7 +  const getDetail = vi.fn();                                   
+       8 +  const getScoreHistory = vi.fn();                             
+       9 +  let controller: BinsController;                              
+      10 +                                                               
+      11 +  beforeEach(async () => {                                     
+      12 +    getDetail.mockReset().mockResolvedValue({});               
+      13 +    getScoreHistory.mockReset().mockResolvedValue([]);         
+      14 +    const moduleRef = await Test.createTestingModule({         
+      15 +      controllers: [BinsController],                           
+      16 +      providers: [{ provide: BinsService, useValue: { getDetail
+         +, getScoreHistory } }],                                        
+      17 +    }).compile();                                              
+      18 +    controller = moduleRef.get(BinsController);                
+      19 +  });                                                          
+      20 +                                                               
+      21 +  it('normalizes typed or scanned codes', async () => {        
+      22 +    await controller.detail(' a-01-03 ');                      
+      23 +    expect(getDetail).toHaveBeenCalledWith('A-01-03');         
+      24 +  });                                                          
+      25 +                                                               
+      26 +  it('passes a valid history limit through', async () => {     
+      27 +    await controller.scores('a-01-03', 5);                     
+      28 +    expect(getScoreHistory).toHaveBeenCalledWith('A-01-03', 5);
+      29 +  });                                                          
+      30 +                                                               
+      31 +  it.each([0, 101])('rejects limit %i', (limit) => {           
+      32 +    expect(() => controller.scores('A-01-03', limit)).toThrow(B
+         +adRequestException);                                           
+      33 +    expect(getScoreHistory).not.toHaveBeenCalled();            
+      34 +  });                                                          
+      35 +});                                                            
+  ⎿  Created apps/api/src/bins/bins.controller.ts (+41 -0)
+       1 +import {                                                       
+       2 +  BadRequestException,                                         
+       3 +  Controller,                                                  
+       4 +  DefaultValuePipe,                                            
+       5 +  Get,                                                         
+       6 +  Param,                                                       
+       7 +  ParseIntPipe,                                                
+       8 +  Query,                                                       
+       9 +} from '@nestjs/common';                                       
+      10 +import type { BinDetailResponse, ScoreHistoryEntry } from '@riv
+         +bins/shared';                                                  
+      11 +import { BinsService } from './bins.service.js';               
+      12 +                                                               
+      13 +export const DEFAULT_HISTORY_LIMIT = 20;                       
+      14 +export const MAX_HISTORY_LIMIT = 100;                          
+      15 +                                                               
+      16 +/** Bin codes are matched case-insensitively, so typed or scann
+         +ed codes both work. */                                         
+      17 +const normalizeCode = (code: string): string => code.trim().toU
+         +pperCase();                                                    
+      18 +                                                               
+      19 +@Controller('bins')                                            
+      20 +export class BinsController {                                  
+      21 +  constructor(private readonly bins: BinsService) {}           
+      22 +                                                               
+      23 +  /** Bin detail by code (D-062). */                           
+      24 +  @Get(':code')                                                
+      25 +  detail(@Param('code') code: string): Promise<BinDetailRespons
+         +e> {                                                           
+      26 +    return this.bins.getDetail(normalizeCode(code));           
+      27 +  }                                                            
+      28 +                                                               
+      29 +  /** Score history, newest first; `limit` defaults to 20 (D-06
+         +3). */                                                         
+      30 +  @Get(':code/scores')                                         
+      31 +  scores(                                                      
+      32 +    @Param('code') code: string,                               
+      33 +    @Query('limit', new DefaultValuePipe(DEFAULT_HISTORY_LIMIT)
+         +, ParseIntPipe)                                                
+      34 +    limit: number,                                             
+      35 +  ): Promise<ScoreHistoryEntry[]> {                            
+      36 +    if (limit < 1 || limit > MAX_HISTORY_LIMIT) {              
+      37 +      throw new BadRequestException(`limit must be between 1 an
+         +d ${MAX_HISTORY_LIMIT}`);                                      
+      38 +    }                                                          
+      39 +    return this.bins.getScoreHistory(normalizeCode(code), limit
+         +);                                                             
+      40 +  }                                                            
+     … 1 more lines (ctrl+o to expand)
+  ⎿  Created apps/api/src/bins/bins.mapper.spec.ts (+101 -0)
+        1 +import { toBinDetail, toScoreHistoryEntry, type BinDetailRow }
+          + from './bins.mapper.js';                                     
+        2 +                                                              
+        3 +const factors = [                                             
+        4 +  {                                                           
+        5 +    key: 'skuMix',                                            
+        6 +    label: 'Distinct SKUs in bin',                            
+        7 +    rawValue: 3,                                              
+        8 +    threshold: 6,                                             
+        9 +    normalized: 0.4,                                          
+       10 +    weight: 0.1,                                              
+       11 +    points: 4,                                                
+       12 +  },                                                          
+       13 +];                                                            
+       14 +                                                              
+       15 +const row: BinDetailRow = {                                   
+       16 +  id: 7,                                                      
+       17 +  code: 'A-01-03',                                            
+       18 +  level: 1,                                                   
+       19 +  position: 3,                                                
+       20 +  lastAuditedAt: null,                                        
+       21 +  rack: { code: '01', aisle: { code: 'A' } },                 
+       22 +  currentScore: {                                             
+       23 +    id: 40,                                                   
+       24 +    score: 4,                                                 
+       25 +    trigger: 'SEED',                                          
+       26 +    auditResultId: null,                                      
+       27 +    computedAt: new Date('2026-10-04T08:00:00Z'),             
+       28 +    factors,                                                  
+       29 +  },                                                          
+       30 +  pallets: [                                                  
+       31 +    {                                                         
+       32 +      code: 'PLT-0002',                                       
+       33 +      items: [                                                
+       34 +        { quantity: 5, product: { sku: 'SKU-B', name: 'Bolts' 
+          +} },                                                          
+       35 +        { quantity: 0, product: { sku: 'SKU-C', name: 'Clips' 
+          +} },                                                          
+       36 +        { quantity: 12, product: { sku: 'SKU-A', name: 'Anchor
+          +s' } },                                                       
+       37 +      ],                                                      
+       38 +    },                                                        
+       39 +    { code: 'PLT-0001', items: [] },                          
+       40 +  ],                                                          
+     … 61 more lines (ctrl+o to expand)
+  ⎿  Created apps/api/src/bins/bins.mapper.ts (+74 -0)
+       1 +// Pure mapping from Prisma rows to the GET /bins/:code and /bi
+         +ns/:code/scores contracts.                                     
+       2 +import type {                                                  
+       3 +  BinDetailResponse,                                           
+       4 +  FactorBreakdown,                                             
+       5 +  ScoreHistoryEntry,                                           
+       6 +  ScoreTrigger,                                                
+       7 +} from '@rivbins/shared';                                      
+       8 +                                                               
+       9 +export interface ScoreRow {                                    
+      10 +  id: number;                                                  
+      11 +  score: number;                                               
+      12 +  trigger: ScoreTrigger;                                       
+      13 +  auditResultId: number | null;                                
+      14 +  computedAt: Date;                                            
+      15 +}                                                              
+      16 +                                                               
+      17 +export interface BinDetailRow {                                
+      18 +  id: number;                                                  
+      19 +  code: string;                                                
+      20 +  level: number;                                               
+      21 +  position: number;                                            
+      22 +  lastAuditedAt: Date | null;                                  
+      23 +  rack: { code: string; aisle: { code: string } };             
+      24 +  /** `factors` is the BinScore JSON column: FactorBreakdown[] 
+         +as written by the scorer. */                                   
+      25 +  currentScore: (ScoreRow & { factors: unknown }) | null;      
+      26 +  pallets: {                                                   
+      27 +    code: string;                                              
+      28 +    items: { quantity: number; product: { sku: string; name: st
+         +ring } }[];                                                    
+      29 +  }[];                                                         
+      30 +}                                                              
+      31 +                                                               
+      32 +export function toBinDetail(row: BinDetailRow): BinDetailRespon
+         +se {                                                           
+      33 +  const current = row.currentScore;                            
+      34 +  return {                                                     
+      35 +    id: row.id,                                                
+      36 +    code: row.code,                                            
+      37 +    aisle: row.rack.aisle.code,                                
+      38 +    rack: row.rack.code,                                       
+      39 +    level: row.level,                                          
+      40 +    position: row.position,                                    
+     … 34 more lines (ctrl+o to expand)
+  ⎿  Created apps/api/src/bins/bins.module.ts (+9 -0)
+      1 +import { Module } from '@nestjs/common';                        
+      2 +import { BinsController } from './bins.controller.js';          
+      3 +import { BinsService } from './bins.service.js';                
+      4 +                                                                
+      5 +@Module({                                                       
+      6 +  controllers: [BinsController],                                
+      7 +  providers: [BinsService],                                     
+      8 +})                                                              
+      9 +export class BinsModule {}                                      
+  ⎿  … 1 more file changed
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Next I'll write the e2e tests and wire both modules into the app.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/api &&
+      python3 - <<'EOF'
+      p='src/app.module.ts'…)
+  ⎿  import { Module } from '@nestjs/common';
+     import { ConfigModule } from '@nestjs/config';
+     import { BinsModule } from './bins/bins.module.js';
+     … +33 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/src/app.module.ts (+10 -1)
+       1  import { Module } from '@nestjs/common';
+       2  import { ConfigModule } from '@nestjs/config';
+       3 +import { BinsModule } from './bins/bins.module.js';            
+       4  import { HealthModule } from './health/health.module.js';
+       5  import { PrismaModule } from './prisma/prisma.module.js';
+       6  import { ScoringModule } from './scoring/scoring.module.js';
+       7 +import { WarehouseModule } from './warehouse/warehouse.module.j
+         +s';                                                            
+       8  
+       9  @Module({
+       8 -  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaMod
+         -ule, HealthModule, ScoringModule],                             
+      10 +  imports: [                                                   
+      11 +    ConfigModule.forRoot({ isGlobal: true }),                  
+      12 +    PrismaModule,                                              
+      13 +    HealthModule,                                              
+      14 +    ScoringModule,                                             
+      15 +    WarehouseModule,                                           
+      16 +    BinsModule,                                                
+      17 +  ],                                                           
+      18  })
+      19  export class AppModule {}
+  ⎿  Created apps/api/test/heatmap.e2e-spec.ts (+95 -0)
+       1 +// Requires a seeded database: run `pnpm db:up`, `pnpm db:migra
+         +te`, and `pnpm db:seed`.                                       
+       2 +// Read-only: these endpoints never write.                     
+       3 +import type { Server } from 'node:http';                       
+       4 +import { INestApplication } from '@nestjs/common';             
+       5 +import { Test } from '@nestjs/testing';                        
+       6 +import type {                                                  
+       7 +  BinDetailResponse,                                           
+       8 +  ScoreHistoryEntry,                                           
+       9 +  WarehouseLayoutResponse,                                     
+      10 +} from '@rivbins/shared';                                      
+      11 +import request from 'supertest';                               
+      12 +import { AppModule } from '../src/app.module.js';              
+      13 +                                                               
+      14 +describe('Heatmap and bin detail (e2e)', () => {               
+      15 +  let app: INestApplication<Server>;                           
+      16 +                                                               
+      17 +  beforeAll(async () => {                                      
+      18 +    const moduleRef = await Test.createTestingModule({         
+      19 +      imports: [AppModule],                                    
+      20 +    }).compile();                                              
+      21 +                                                               
+      22 +    app = moduleRef.createNestApplication();                   
+      23 +    await app.init();                                          
+      24 +  });                                                          
+      25 +                                                               
+      26 +  afterAll(async () => {                                       
+      27 +    await app.close();                                         
+      28 +  });                                                          
+      29 +                                                               
+      30 +  const get = (path: string) => request(app.getHttpServer()).ge
+         +t(path);                                                       
+      31 +                                                               
+      32 +  it('GET /warehouse/layout returns the seeded 3 × 2 racks of 2
+         + × 3 bins (D-043)', async () => {                              
+      33 +    const res = await get('/warehouse/layout').expect(200);    
+      34 +    const layout = res.body as WarehouseLayoutResponse;        
+      35 +                                                               
+      36 +    expect(layout.aisles.map((a) => a.code)).toEqual(['A', 'B',
+         + 'C']);                                                        
+      37 +    const racks = layout.aisles.flatMap((a) => a.racks);       
+      38 +    expect(racks).toHaveLength(6);                             
+      39 +    for (const rack of racks) {                                
+      40 +      expect(rack).toMatchObject({ levels: 2, positions: 3 }); 
+     … 55 more lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ The project uses noUncheckedIndexedAccess, so I'll switch the specs to
+  optional chaining.
+
+⏺ Bash(python3 - <<'EOF'
+      p='src/warehouse/warehouse.mapper.spec.ts'…)
+  ⎿  test/heatmap.e2e-spec.ts:80:12 - error TS2532: Object is possibly 'und
+     efined'.
+     … +13 lines (ctrl+o to expand)
+  ⎿  Updated apps/api/src/bins/bins.mapper.spec.ts (+1 -1)
+      63    it('sorts pallets and lines and hides lines with quantity 0 (
+          D-065)', () => {
+      64      const { pallets } = toBinDetail(row);
+      65      expect(pallets.map((p) => p.code)).toEqual(['PLT-0001', 'PL
+          T-0002']);
+      66 -    expect(pallets[1].items).toEqual([                         
+      66 +    expect(pallets[1]?.items).toEqual([                        
+      67        { sku: 'SKU-A', name: 'Anchors', quantity: 12 },
+      68        { sku: 'SKU-B', name: 'Bolts', quantity: 5 },
+      69      ]);
+  ⎿  Updated apps/api/src/warehouse/warehouse.mapper.spec.ts (+5 -5)
+      44      const layout = toWarehouseLayout(row);
+      45      expect(layout.warehouse).toEqual({ code: 'WH1', name: 'Main
+          ' });
+      46      expect(layout.aisles.map((a) => a.code)).toEqual(['A', 'B']
+          );
+      47 -    expect(layout.aisles[0].racks.map((r) => r.code)).toEqual([
+         -'01', '02']);                                                  
+      47 +    expect(layout.aisles[0]?.racks.map((r) => r.code)).toEqual(
+         +['01', '02']);                                                 
+      48    });
+      49  
+      50    it('orders bins top shelf first, then by position', () => {
+      51 -    const rack = toWarehouseLayout(row).aisles[0].racks[0];    
+      52 -    expect(rack.bins.map((b) => b.id)).toEqual([3, 1, 2]);     
+      51 +    const rack = toWarehouseLayout(row).aisles[0]?.racks[0];   
+      52 +    expect(rack?.bins.map((b) => b.id)).toEqual([3, 1, 2]);    
+      53    });
+      54  
+      55    it('sizes the grid from the highest level and position', () =
+          > {
+      56 -    const [full, empty] = toWarehouseLayout(row).aisles[0].rack
+         -s;                                                             
+      56 +    const [full, empty] = toWarehouseLayout(row).aisles[0]?.rac
+         +ks ?? [];                                                      
+      57      expect(full).toMatchObject({ levels: 2, positions: 3 });
+      58      expect(empty).toMatchObject({ levels: 0, positions: 0, bins
+          : [] });
+      59    });
+      60  
+      61    it('flattens the current score and serializes dates', () => {
+      62 -    const [unscored, scored] = toWarehouseLayout(row).aisles[0]
+         -.racks[0].bins;                                                
+      62 +    const [unscored, scored] = toWarehouseLayout(row).aisles[0]
+         +?.racks[0]?.bins ?? [];                                        
+      63      expect(scored).toEqual({
+      64        id: 1,
+      65        code: 'B-1',
+
+⏺ Bash(sed -i '' 's/expect(all\[0\].score)/expect(all[0]?.score)/'
+      test/heatmap.e2e-spec.ts && source ~/.nvm/nvm.sh >/dev/null && nvm use
+      >/dev/null && npx tsc --noEmi…)
+  ⎿  lint exit 0
+           Tests  73 passed (73)
+  ⎿  Updated apps/api/test/heatmap.e2e-spec.ts (+1 -1)
+      77      expect(all.length).toBeGreaterThan(0); // at least the SEED
+           row
+      78      const times = all.map((e) => Date.parse(e.computedAt));
+      79      expect(times).toEqual([...times].sort((a, b) => b - a));
+      80 -    expect(all[0].score).toBe(detail.currentScore?.score);     
+      80 +    expect(all[0]?.score).toBe(detail.currentScore?.score);    
+      81  
+      82      const one = (await get('/bins/A-01-01/scores?limit=1').expe
+          ct(200))
+      83        .body as ScoreHistoryEntry[];
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Unit specs pass. Next I'll run the e2e tests against the database.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ All e2e tests pass. Now I'll commit the warehouse and bins changes separately.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Now the web side. First I'll check the Next 16 docs, as AGENTS.md requires.
+
+  Ran 4 shell commands (ctrl+o to expand)
+⏺ I'll switch to refresh() from next/cache instead of revalidatePath for the
+  recompute action, since it's better suited for refreshing this dynamic heatmap
+  page—noting the change in the decision log. Next, I'll check globals.css and
+  the lint config.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Now the heatmap commit: color bands, grid, legend, and the recompute action.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/web/src
+      && mkdir -p components/heatmap && cat > lib/score-bands.ts <<'EOF'
+      // Heatmap color band…)
+  ⎿   WARN  Issue while reading "/Users/raymonddavidmoramontero/.npmrc". Fa
+     iled to replace env in config: ${GCP_PROJECT_ID}
+     … +12 lines (ctrl+o to expand)
+  ⎿  Created apps/web/src/app/actions.ts (+27 -0)
+       1 +'use server';                                                  
+       2 +                                                               
+       3 +import type { RecomputeScoresResponse } from '@rivbins/shared';
+       4 +import { refresh } from 'next/cache';                          
+       5 +import { apiFetch } from '@/lib/api';                          
+       6 +                                                               
+       7 +export type RecomputeState =                                   
+       8 +  | { status: 'idle' }                                         
+       9 +  | { status: 'done'; binsRecomputed: number; computedAt: strin
+         +g }                                                            
+      10 +  | { status: 'error'; message: string };                      
+      11 +                                                               
+      12 +/** "Recompute scores": rescores every bin, then refreshes the 
+         +heatmap (D-053). */                                            
+      13 +export async function recomputeScores(): Promise<RecomputeState
+         +> {                                                            
+      14 +  try {                                                        
+      15 +    const result = await apiFetch<RecomputeScoresResponse>('/sc
+         +oring/recompute', {                                            
+      16 +      method: 'POST',                                          
+      17 +    });                                                        
+      18 +    refresh();                                                 
+      19 +    return {                                                   
+      20 +      status: 'done',                                          
+      21 +      binsRecomputed: result.binsRecomputed,                   
+      22 +      computedAt: result.computedAt,                           
+      23 +    };                                                         
+      24 +  } catch {                                                    
+      25 +    return { status: 'error', message: 'Recompute failed. Is th
+         +e API running?' };                                             
+      26 +  }                                                            
+      27 +}                                                              
+  ⎿  Updated apps/web/src/app/page.tsx (+43 -22)
+       1 +import type { WarehouseLayoutResponse } from '@rivbins/shared';
+       2 +import { Heatmap } from '@/components/heatmap/Heatmap';        
+       3 +import { Legend } from '@/components/heatmap/Legend';          
+       4 +import { RecomputeButton } from '@/components/heatmap/Recompute
+         +Button';                                                       
+       5  import { apiFetch } from '@/lib/api';
+       6 +import { formatDateTime } from '@/lib/format';                 
+       7  
+       3 -interface HealthStatus {                                       
+       4 -  status: 'ok';                                                
+       5 -  database: 'up';                                              
+       6 -}                                                              
+       7 -                                                               
+       8 -async function getApiStatus(): Promise<'up' | 'down'> {        
+       8 +async function getLayout(): Promise<WarehouseLayoutResponse | n
+         +ull> {                                                         
+       9    try {
+      10 -    await apiFetch<HealthStatus>('/health');                   
+      11 -    return 'up';                                               
+      10 +    return await apiFetch<WarehouseLayoutResponse>('/warehouse/
+         +layout');                                                      
+      11    } catch {
+      13 -    return 'down';                                             
+      12 +    return null;                                               
+      13    }
+      14  }
+      15  
+      17 -export default async function HomePage() {                     
+      18 -  const apiStatus = await getApiStatus();                      
+      16 +/** Latest score timestamp across all bins: when the heatmap wa
+         +s last recomputed. */                                          
+      17 +function lastComputedAt(layout: WarehouseLayoutResponse): strin
+         +g | null {                                                     
+      18 +  const times = layout.aisles                                  
+      19 +    .flatMap((a) => a.racks.flatMap((r) => r.bins.map((b) => b.
+         +scoreComputedAt)))                                             
+      20 +    .filter((t): t is string => t !== null)                    
+      21 +    .sort();                                                   
+      22 +  return times.at(-1) ?? null;                                 
+      23 +}                                                              
+      24 +                                                               
+      25 +export default async function HeatmapPage(props: PageProps<'/'>
+         +) {                                                            
+      26 +  const { bin } = await props.searchParams;                    
+      27 +  const selectedCode = typeof bin === 'string' ? bin.toUpperCas
+         +e() : null;                                                    
+      28 +  const layout = await getLayout();                            
+      29  
+     … 37 more lines (ctrl+o to expand)
+  ⎿  Created apps/web/src/components/heatmap/Heatmap.tsx (+27 -0)
+       1 +import type { WarehouseLayoutResponse } from '@rivbins/shared';
+       2 +import { RackGrid } from './RackGrid';                         
+       3 +                                                               
+       4 +interface HeatmapProps {                                       
+       5 +  layout: WarehouseLayoutResponse;                             
+       6 +  selectedCode: string | null;                                 
+       7 +}                                                              
+       8 +                                                               
+       9 +/** Bins grouped by aisle and rack, colored by current score. *
+         +/                                                              
+      10 +export function Heatmap({ layout, selectedCode }: HeatmapProps)
+         + {                                                             
+      11 +  return (                                                     
+      12 +    <div className="flex flex-col gap-6">                      
+      13 +      {layout.aisles.map((aisle) => (                          
+      14 +        <section key={aisle.code} aria-labelledby={`aisle-${ais
+         +le.code}`}>                                                    
+      15 +          <h2 id={`aisle-${aisle.code}`} className="mb-2 text-b
+         +ase font-semibold">                                            
+      16 +            Aisle {aisle.code}                                 
+      17 +          </h2>                                                
+      18 +          <div className="grid gap-3 sm:grid-cols-2">          
+      19 +            {aisle.racks.map((rack) => (                       
+      20 +              <RackGrid key={rack.code} aisle={aisle.code} rack
+         +={rack} selectedCode={selectedCode} />                         
+      21 +            ))}                                                
+      22 +          </div>                                               
+      23 +        </section>                                             
+      24 +      ))}                                                      
+      25 +    </div>                                                     
+      26 +  );                                                           
+      27 +}                                                              
+  ⎿  Created apps/web/src/components/heatmap/Legend.tsx (+15 -0)
+       1 +import { BAND_STYLES, LEGEND_BANDS } from '@/lib/score-bands'; 
+       2 +                                                               
+       3 +export function Legend() {                                     
+       4 +  return (                                                     
+       5 +    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-
+         +zinc-600 dark:text-zinc-400">                                  
+       6 +      {LEGEND_BANDS.map((band) => (                            
+       7 +        <li key={band} className="flex items-center gap-1.5">  
+       8 +          <span className={`size-3 rounded-sm ${BAND_STYLES[ban
+         +d].swatch}`} aria-hidden />                                    
+       9 +          {BAND_STYLES[band].label}                            
+      10 +          {band !== 'none' && <span className="text-zinc-400">(
+         +{BAND_STYLES[band].range})</span>}                             
+      11 +        </li>                                                  
+      12 +      ))}                                                      
+      13 +    </ul>                                                      
+      14 +  );                                                           
+      15 +}                                                              
+  ⎿  Created apps/web/src/components/heatmap/RackGrid.tsx (+81 -0)
+       1 +import type { HeatmapBin, HeatmapRack } from '@rivbins/shared';
+       2 +import Link from 'next/link';                                  
+       3 +import { BAND_STYLES, scoreBand } from '@/lib/score-bands';    
+       4 +                                                               
+       5 +interface RackGridProps {                                      
+       6 +  aisle: string;                                               
+       7 +  rack: HeatmapRack;                                           
+       8 +  selectedCode: string | null;                                 
+       9 +}                                                              
+      10 +                                                               
+      11 +/** One rack as a level × position grid, top shelf first, like 
+         +the physical rack. */                                          
+      12 +export function RackGrid({ aisle, rack, selectedCode }: RackGri
+         +dProps) {                                                      
+      13 +  const levels = Array.from({ length: rack.levels }, (_, i) => 
+         +rack.levels - i);                                              
+      14 +                                                               
+      15 +  return (                                                     
+      16 +    <section className="rounded-lg border border-zinc-200 p-3 d
+         +ark:border-zinc-800">                                          
+      17 +      <h3 className="mb-2 text-sm font-medium text-zinc-700 dar
+         +k:text-zinc-300">                                              
+      18 +        Rack {aisle}-{rack.code}                               
+      19 +      </h3>                                                    
+      20 +      <div                                                     
+      21 +        className="grid gap-1.5"                               
+      22 +        style={{ gridTemplateColumns: `auto repeat(${rack.posit
+         +ions}, minmax(0, 1fr))` }}                                     
+      23 +      >                                                        
+      24 +        {levels.map((level) => (                               
+      25 +          <RackRow                                             
+      26 +            key={level}                                        
+      27 +            level={level}                                      
+      28 +            positions={rack.positions}                         
+      29 +            bins={rack.bins.filter((b) => b.level === level)}  
+      30 +            selectedCode={selectedCode}                        
+      31 +          />                                                   
+      32 +        ))}                                                    
+      33 +      </div>                                                   
+      34 +    </section>                                                 
+      35 +  );                                                           
+      36 +}                                                              
+      37 +                                                               
+      38 +function RackRow({                                             
+      39 +  level,                                                       
+      40 +  positions,                                                   
+     … 41 more lines (ctrl+o to expand)
+  ⎿  … 3 more files changed
+
+⏺ Typecheck and lint pass. Next I'll run the app and take a screenshot to check
+  it.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Both dev servers are already running. I'll check whether the API has reloaded
+  the new endpoints.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ Both servers hot-reloaded. I'll take a headless Chrome screenshot.
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+⏺ The heatmap renders correctly: 6 racks, all 3 color bands, the legend, and the
+  selected-bin ring. I'll commit it, holding back the formatAge helper for the
+  drawer commit.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/web &&
+      python3 - <<'EOF'
+      p='src/lib/format.ts'…)
+  ⎿  A  src/app/actions.ts
+     M  src/app/page.tsx
+     A  src/components/heatmap/Heatmap.tsx
+     … +6 lines (ctrl+o to expand)
+  ⎿  Updated apps/web/src/lib/format.ts (+1 -0)
+       8    return iso ? dateTime.format(new Date(iso)) : fallback;
+       9  }
+      10  
+      11 +                                                               
+      12  /** "3 days ago" style age of an ISO timestamp relative to `now
+          `. */
+      13  export function formatAge(iso: string, now: Date): string {
+      14    const days = (now.getTime() - Date.parse(iso)) / 86_400_000;
+
+⏺ Next is the drawer, built from the shell, header, factor breakdown, history,
+  and pallets.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/web/src
+      && mkdir -p components/bin-detail && cat >
+      components/bin-detail/DrawerShell.tsx <<'EOF'…)
+  ⎿  > @rivbins/web@0.2.0 typecheck /Users/raymonddavidmoramontero/Desktop/
+     projects/RivBins/apps/web
+     > next typegen && tsc --noEmit
+     … +7 lines (ctrl+o to expand)
+  ⎿  Updated apps/web/src/app/page.tsx (+3 -0)
+      1  import type { WarehouseLayoutResponse } from '@rivbins/shared';
+      2 +import { BinDrawer } from '@/components/bin-detail/BinDrawer';  
+      3  import { Heatmap } from '@/components/heatmap/Heatmap';
+      4  import { Legend } from '@/components/heatmap/Legend';
+      5  import { RecomputeButton } from '@/components/heatmap/RecomputeB
+         utton';
+     ...
+      51            Could not load the warehouse layout. Check that the A
+          PI is running and the database is seeded.
+      52          </p>
+      53        )}
+      54 +                                                               
+      55 +      {selectedCode && <BinDrawer code={selectedCode} />}      
+      56      </main>
+      57    );
+      58  }
+  ⎿  Created apps/web/src/components/bin-detail/BinDrawer.tsx (+93 -0)
+       1 +import type { BinDetailResponse, ScoreHistoryEntry } from '@riv
+         +bins/shared';                                                  
+       2 +import { ApiError, apiFetch } from '@/lib/api';                
+       3 +import { formatAge, formatDateTime } from '@/lib/format';      
+       4 +import { BAND_STYLES, scoreBand } from '@/lib/score-bands';    
+       5 +import { DrawerShell } from './DrawerShell';                   
+       6 +import { FactorBreakdown } from './FactorBreakdown';           
+       7 +import { PalletList } from './PalletList';                     
+       8 +import { ScoreHistory } from './ScoreHistory';                 
+       9 +                                                               
+      10 +const HISTORY_LIMIT = 20;                                      
+      11 +                                                               
+      12 +type DrawerData =                                              
+      13 +  | { status: 'ok'; bin: BinDetailResponse; history: ScoreHisto
+         +ryEntry[] }                                                    
+      14 +  | { status: 'not-found' }                                    
+      15 +  | { status: 'error' };                                       
+      16 +                                                               
+      17 +async function loadBin(code: string): Promise<DrawerData> {    
+      18 +  const path = `/bins/${encodeURIComponent(code)}`;            
+      19 +  try {                                                        
+      20 +    const [bin, history] = await Promise.all([                 
+      21 +      apiFetch<BinDetailResponse>(path),                       
+      22 +      apiFetch<ScoreHistoryEntry[]>(`${path}/scores?limit=${HIS
+         +TORY_LIMIT}`),                                                 
+      23 +    ]);                                                        
+      24 +    return { status: 'ok', bin, history };                     
+      25 +  } catch (error) {                                            
+      26 +    return { status: error instanceof ApiError && error.status 
+         +=== 404 ? 'not-found' : 'error' };                             
+      27 +  }                                                            
+      28 +}                                                              
+      29 +                                                               
+      30 +/** Server-rendered bin detail for `?bin=<code>` (D-064). */   
+      31 +export async function BinDrawer({ code }: { code: string }) {  
+      32 +  const data = await loadBin(code);                            
+      33 +                                                               
+      34 +  if (data.status !== 'ok') {                                  
+      35 +    return (                                                   
+      36 +      <DrawerShell title={`Bin ${code}`}>                      
+      37 +        <p role="alert" className="text-sm text-zinc-600 dark:t
+         +ext-zinc-400">                                                 
+      38 +          {data.status === 'not-found'                         
+      39 +            ? `There is no bin with code ${code}.`             
+      40 +            : 'Could not load this bin. Check that the API is r
+         +unning.'}                                                      
+     … 53 more lines (ctrl+o to expand)
+  ⎿  Created apps/web/src/components/bin-detail/DrawerShell.tsx (+54 -0)
+       1 +'use client';                                                  
+       2 +                                                               
+       3 +import Link from 'next/link';                                  
+       4 +import { useRouter } from 'next/navigation';                   
+       5 +import { useEffect, useRef, type ReactNode } from 'react';     
+       6 +                                                               
+       7 +const CLOSE_HREF = '/';                                        
+       8 +                                                               
+       9 +/** Side panel over the heatmap. Closes with the ✕ link, a back
+         +drop click, or Escape. */                                      
+      10 +export function DrawerShell({ title, children }: { title: strin
+         +g; children: ReactNode }) {                                    
+      11 +  const router = useRouter();                                  
+      12 +  const panel = useRef<HTMLElement>(null);                     
+      13 +                                                               
+      14 +  useEffect(() => {                                            
+      15 +    panel.current?.focus();                                    
+      16 +    const onKey = (event: KeyboardEvent) => {                  
+      17 +      if (event.key === 'Escape') router.push(CLOSE_HREF, { scr
+         +oll: false });                                                 
+      18 +    };                                                         
+      19 +    window.addEventListener('keydown', onKey);                 
+      20 +    return () => window.removeEventListener('keydown', onKey); 
+      21 +  }, [router]);                                                
+      22 +                                                               
+      23 +  return (                                                     
+      24 +    <>                                                         
+      25 +      <Link                                                    
+      26 +        href={CLOSE_HREF}                                      
+      27 +        scroll={false}                                         
+      28 +        aria-label="Close bin detail"                          
+      29 +        tabIndex={-1}                                          
+      30 +        className="fixed inset-0 z-10 bg-zinc-950/30"          
+      31 +      />                                                       
+      32 +      <aside                                                   
+      33 +        ref={panel}                                            
+      34 +        tabIndex={-1}                                          
+      35 +        role="dialog"                                          
+      36 +        aria-label={title}                                     
+      37 +        className="fixed inset-y-0 right-0 z-20 flex w-full max
+         +-w-md flex-col overflow-y-auto border-l border-zinc-200 bg-back
+         +ground shadow-xl outline-none dark:border-zinc-800"            
+      38 +      >                                                        
+      39 +        <div className="flex items-center justify-between borde
+         +r-b border-zinc-200 px-5 py-3 dark:border-zinc-800">           
+      40 +          <span className="text-xs font-medium uppercase tracki
+         +ng-wide text-zinc-500">Bin detail</span>                       
+     … 14 more lines (ctrl+o to expand)
+  ⎿  Created apps/web/src/components/bin-detail/FactorBreakdown.tsx (+67 
+     -0)
+       1 +import type { FactorBreakdown as Factor } from '@rivbins/shared
+         +';                                                             
+       2 +                                                               
+       3 +/** Ratios (D-052) and percentages print with at most 2 decimal
+         +s. */                                                          
+       4 +const percent = (ratio: number): string => `${Number((ratio * 1
+         +00).toFixed(2))}%`;                                            
+       5 +                                                               
+       6 +function formatValue(factor: Factor, value: number): string {  
+       7 +  switch (factor.key) {                                        
+       8 +    case 'timeSinceLastAudit':                                 
+       9 +      return `${value} days`;                                  
+      10 +    case 'lastDiscrepancySize':                                
+      11 +      return percent(value);                                   
+      12 +    default:                                                   
+      13 +      return String(value);                                    
+      14 +  }                                                            
+      15 +}                                                              
+      16 +                                                               
+      17 +interface FactorBreakdownProps {                               
+      18 +  factors: Factor[];                                           
+      19 +  score: number;                                               
+      20 +  neverAudited: boolean;                                       
+      21 +}                                                              
+      22 +                                                               
+      23 +/** The "why" behind a score: each factor's raw value, threshol
+         +d, weight, and points. */                                      
+      24 +export function FactorBreakdown({ factors, score, neverAudited 
+         +}: FactorBreakdownProps) {                                     
+      25 +  const total = factors.reduce((sum, f) => sum + f.points, 0); 
+      26 +                                                               
+      27 +  return (                                                     
+      28 +    <section aria-labelledby="factors-heading">                
+      29 +      <h3 id="factors-heading" className="mb-3 text-sm font-sem
+         +ibold">                                                        
+      30 +        Why this score                                         
+      31 +      </h3>                                                    
+      32 +      <ul className="flex flex-col gap-3">                     
+      33 +        {factors.map((factor) => (                             
+      34 +          <li key={factor.key}>                                
+      35 +            <div className="flex items-baseline justify-between
+         + gap-2 text-sm">                                               
+      36 +              <span>{factor.label}</span>                      
+      37 +              <span className="font-medium tabular-nums">      
+      38 +                {factor.points.toFixed(2)} <span className="tex
+         +t-xs font-normal text-zinc-500">pts</span>                     
+      39 +              </span>                                          
+      40 +            </div>                                             
+     … 27 more lines (ctrl+o to expand)
+  ⎿  Created apps/web/src/components/bin-detail/PalletList.tsx (+47 -0)
+       1 +import type { BinPallet } from '@rivbins/shared';              
+       2 +                                                               
+       3 +/** Pallets in the bin and their stocked lines (D-065). */     
+       4 +export function PalletList({ pallets }: { pallets: BinPallet[] 
+         +}) {                                                           
+       5 +  return (                                                     
+       6 +    <section aria-labelledby="pallets-heading">                
+       7 +      <h3 id="pallets-heading" className="mb-3 text-sm font-sem
+         +ibold">                                                        
+       8 +        Pallets in bin                                         
+       9 +      </h3>                                                    
+      10 +      {pallets.length === 0 ? (                                
+      11 +        <p className="text-sm text-zinc-500">This bin is empty.
+         +</p>                                                           
+      12 +      ) : (                                                    
+      13 +        <ul className="flex flex-col gap-3">                   
+      14 +          {pallets.map((pallet) => (                           
+      15 +            <li key={pallet.code} className="rounded-md border 
+         +border-zinc-200 dark:border-zinc-800">                         
+      16 +              <p className="border-b border-zinc-200 px-3 py-1.
+         +5 font-mono text-xs font-medium dark:border-zinc-800">         
+      17 +                {pallet.code}                                  
+      18 +              </p>                                             
+      19 +              {pallet.items.length === 0 ? (                   
+      20 +                <p className="px-3 py-2 text-xs text-zinc-500">
+         +No stock on this pallet.</p>                                   
+      21 +              ) : (                                            
+      22 +                <table className="w-full text-sm">             
+      23 +                  <thead className="sr-only">                  
+      24 +                    <tr>                                       
+      25 +                      <th>SKU</th>                             
+      26 +                      <th>Product</th>                         
+      27 +                      <th>Quantity</th>                        
+      28 +                    </tr>                                      
+      29 +                  </thead>                                     
+      30 +                  <tbody>                                      
+      31 +                    {pallet.items.map((item) => (              
+      32 +                      <tr key={item.sku}>                      
+      33 +                        <td className="px-3 py-1 font-mono text
+         +-xs text-zinc-500">{item.sku}</td>                             
+      34 +                        <td className="py-1">{item.name}</td>  
+      35 +                        <td className="px-3 py-1 text-right tab
+         +ular-nums">{item.quantity}</td>                                
+      36 +                      </tr>                                    
+      37 +                    ))}                                        
+      38 +                  </tbody>                                     
+      39 +                </table>                                       
+      40 +              )}                                               
+     … 7 more lines (ctrl+o to expand)
+  ⎿  … 1 more file changed
+
+⏺ Typecheck and lint are clean. I'll screenshot the drawer for an audited bin, a
+  never-audited bin, and an unknown code.
+
+  Read 2 files, ran 1 shell command (ctrl+o to expand)
+
+⏺ The drawer and not-found state work, but the history is cluttered with 20
+  duplicate "Manual recompute" rows masking real changes—I'll group consecutive
+  identical entries into a single line like "Manual recompute ×12" with a time
+  range, a presentation-only fix that doesn't touch the API or D-063. I'll also
+  check the pallets section below the fold.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/web/src
+      && cat > components/bin-detail/ScoreHistory.tsx <<'EOF'
+      import type { ScoreHistoryEntry,…)
+  ⎿  > eslint --max-warnings 0
+     ok
+  ⎿  Shell cwd was reset to 
+     /Users/raymonddavidmoramontero/Desktop/projects/RivBins
+  ⎿  Updated apps/web/src/components/bin-detail/ScoreHistory.tsx (+51 -13)
+       8    AUDIT: 'Audit',
+       9  };
+      10  
+      11 -function triggerLabel(entry: ScoreHistoryEntry): string {      
+      12 -  const label = TRIGGER_LABELS[entry.trigger];                 
+      13 -  return entry.auditResultId === null ? label : `${label} #${en
+         -try.auditResultId}`;                                           
+      11 +/** Consecutive rows with the same score and trigger, newest fi
+         +rst. */                                                        
+      12 +interface HistoryRun {                                         
+      13 +  newest: ScoreHistoryEntry;                                   
+      14 +  oldest: ScoreHistoryEntry;                                   
+      15 +  count: number;                                               
+      16 +}                                                              
+      17 +                                                               
+      18 +/**                                                            
+      19 + * Collapses repeated recomputes that didn't change the score i
+         +nto one line, so                                               
+      20 + * the timeline shows the changes. Audit rows are never merged:
+         + each is its own event.                                        
+      21 + */                                                            
+      22 +function toRuns(entries: ScoreHistoryEntry[]): HistoryRun[] {  
+      23 +  const runs: HistoryRun[] = [];                               
+      24 +  for (const entry of entries) {                               
+      25 +    const last = runs.at(-1);                                  
+      26 +    if (                                                       
+      27 +      last &&                                                  
+      28 +      entry.trigger !== 'AUDIT' &&                             
+      29 +      last.oldest.trigger === entry.trigger &&                 
+      30 +      last.oldest.score === entry.score                        
+      31 +    ) {                                                        
+      32 +      last.oldest = entry;                                     
+      33 +      last.count += 1;                                         
+      34 +    } else {                                                   
+      35 +      runs.push({ newest: entry, oldest: entry, count: 1 });   
+      36 +    }                                                          
+      37 +  }                                                            
+      38 +  return runs;                                                 
+      39 +}                                                              
+      40 +                                                               
+      41 +function triggerLabel({ newest, count }: HistoryRun): string { 
+      42 +  const label = TRIGGER_LABELS[newest.trigger];                
+      43 +  if (newest.auditResultId !== null) return `${label} #${newest
+         +.auditResultId}`;                                              
+      44 +  return count > 1 ? `${label} ×${count}` : label;             
+     … 60 more lines (ctrl+o to expand)
+  ⎿  (timeout 1m 30s)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The history now shows the changes, and the pallets render correctly. One more
+  fix: table columns don't line up across pallets, so I'll give the tables a
+  fixed layout. Then I'll commit.
+
+⏺ Bash(cd /Users/raymonddavidmoramontero/Desktop/projects/RivBins/apps/web &&
+      python3 - <<'EOF'
+      p='src/components/bin-detail/PalletList.tsx'…)
+  ⎿  M  src/app/page.tsx
+     A  src/components/bin-detail/BinDrawer.tsx
+     A  src/components/bin-detail/DrawerShell.tsx
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated apps/web/src/components/bin-detail/PalletList.tsx (+4 -4)
+      19                {pallet.items.length === 0 ? (
+      20                  <p className="px-3 py-2 text-xs text-zinc-500">
+          No stock on this pallet.</p>
+      21                ) : (
+      22 -                <table className="w-full text-sm">             
+      22 +                <table className="w-full table-fixed text-sm"> 
+      23                    <thead className="sr-only">
+      24                      <tr>
+      25 -                      <th>SKU</th>                             
+      25 +                      <th className="w-24">SKU</th>            
+      26                        <th>Product</th>
+      27 -                      <th>Quantity</th>                        
+      27 +                      <th className="w-16">Quantity</th>       
+      28                      </tr>
+      29                    </thead>
+      30                    <tbody>
+      31                      {pallet.items.map((item) => (
+      32                        <tr key={item.sku}>
+      33                          <td className="px-3 py-1 font-mono text
+          -xs text-zinc-500">{item.sku}</td>
+      34 -                        <td className="py-1">{item.name}</td>  
+      34 +                        <td className="truncate py-1">{item.nam
+         +e}</td>                                                        
+      35                          <td className="px-3 py-1 text-right tab
+          ular-nums">{item.quantity}</td>
+      36                        </tr>
+      37                      ))}
+  ⎿  (timeout 1m 30s)
+
+⏺ Next come the docs: the README, the Roadmap, and a decision entry for the two
+  in-flight adjustments.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+⏺ Bash(python3 - <<'EOF'
+      p='README.md'…)
+  ⎿  150:| 03 | Heatmap dashboard + bin detail                      | `03-h
+     eatmap`       | Done     |
+     151:| 04 | Audit plans + tasks                                 | `04-a
+     … +9 lines (ctrl+o to expand)
+  ⎿  Updated CLAUDE.md (+2 -2)
+      147  | 00 | Project setup: business logic, decisions, scaffold  | `
+           00-project-setup` | Done     |
+      148  | 01 | Seed data (schema already in place)                 | `
+           01-schema-seed`   | Done     |
+      149  | 02 | Scoring service + recompute                         | `
+           02-scoring`       | Done     |
+      150 -| 03 | Heatmap dashboard + bin detail                      | `
+          -03-heatmap`       | Next     |                                
+      151 -| 04 | Audit plans + tasks                                 | `
+          -04-audit-plans`   | Planned  |                                
+      150 +| 03 | Heatmap dashboard + bin detail                      | `
+          +03-heatmap`       | Done     |                                
+      151 +| 04 | Audit plans + tasks                                 | `
+          +04-audit-plans`   | Next     |                                
+      152  | 05 | Mobile count flow                                   | `
+           05-count-flow`    | Planned  |
+      153  | R  | Release 1.0.0: commit transcript 05, merge to `main`, t
+           ag `v1.0.0` | not exported | Planned |
+      154  
+  ⎿  Updated DECISIONS.md (+14 -0)
+      618  - **Decision:** The bin detail lists only pallet lines with `q
+           uantity > 0`, matching
+      619    factor 6 (D-055): a line counted down to 0 holds no product.
+      620  - **Alternatives considered:** Showing them dimmed.
+      621 +                                                              
+      622 +## D-066 — Implementation adjustments in feature 03           
+      623 +- **Date:** 2026-10-04                                        
+      624 +- **Area:** Heatmap                                           
+      625 +- **Decision:** Two small changes to the approved plan (D-060)
+          +, made during                                                 
+      626 +  implementation:                                             
+      627 +  - The recompute server action calls `refresh()` from `next/c
+          +ache` instead of                                              
+      628 +    `revalidatePath('/')`. The heatmap is a dynamic page (`no-
+          +store` fetches,                                               
+      629 +    `searchParams`), and Next 16 documents `refresh()` for ref
+          +reshing the current page                                      
+      630 +    after a Server Action.                                    
+      631 +  - The drawer's score history collapses consecutive rows with
+          + the same score and                                           
+      632 +    trigger into one line ("Manual recompute ×12", with a time
+          + range). Audit rows are                                       
+      633 +    never merged. The API still returns every row (D-063); onl
+          +y the presentation                                            
+      634 +    changes, so the timeline shows the changes instead of 20 i
+          +dentical rows.                                                
+  ⎿  Updated README.md (+29 -0)
+      140  drops sharply. A failed count raises factor 4, and factor 5 sh
+           ows how far off it was, so
+      141  the bin stays risky.
+      142  
+      143 +## Heatmap dashboard                                          
+      144 +                                                              
+      145 +The home page (`http://localhost:3000`) shows every bin groupe
+          +d by aisle and rack, one                                      
+      146 +grid per rack (top shelf first). Bins are colored by their cur
+          +rent score:                                                   
+      147 +                                                              
+      148 +| Band | Score |                                              
+      149 +|------|-------|                                              
+      150 +| Green (low risk) | 0–39 |                                   
+      151 +| Yellow (medium risk) | 40–69 |                              
+      152 +| Red (high risk) | 70–100 |                                  
+      153 +| Gray | not scored yet |                                     
+      154 +                                                              
+      155 +Click a bin to open its detail drawer (`/?bin=A-01-03`, sharea
+          +ble). It shows the current                                    
+      156 +score with the per-factor breakdown, the score history with th
+          +e trigger of each change,                                     
+      157 +the last audit date, and the pallets in the bin with their pro
+          +duct lines. "Recompute                                        
+      158 +scores" rescores every bin and refreshes the heatmap.         
+      159 +                                                              
+      160 +## API                                                        
+      161 +                                                              
+      162 +| Method | Path | Returns |                                   
+      163 +|--------|------|---------|                                   
+      164 +| `GET` | `/health` | API and database status |               
+      165 +| `GET` | `/warehouse/layout` | Aisles → racks → bins with eac
+          +h bin's current score |                                       
+      166 +| `GET` | `/bins/:code` | Bin detail: location, last audit, cu
+          +rrent score with breakdown, pallets (404 if unknown) |        
+      167 +| `GET` | `/bins/:code/scores?limit=20` | Score history, newes
+          +t first (`limit` 1–100, default 20) |                         
+      168 +| `POST` | `/scoring/recompute` | Rescores every bin; returns 
+          +`{ trigger, binsRecomputed, computedAt }` |                   
+      169 +                                                              
+      170 +Bin codes are matched case-insensitively.                     
+      171 +                                                              
+      172  ## Project docs
+      173  
+      174  - [`CLAUDE.md`](CLAUDE.md): business rules, scoring model, and
+            conventions.
+
+⏺ Everything is committed. Before pushing, I'll run the full repo checks (lint,
+  typecheck, tests, build).
+
+  Ran 1 shell command (ctrl+o to expand)
+
+⏺ All checks pass: 73 unit tests, 8 e2e tests, and the build. I'll push and open
+  the PR.
+
+  Created PR #11 (ctrl+o to expand)
+
+⏺ PR #11 is open. Next is the mandatory /code-review at level medium, excluding
+  transcripts.
+
+⏺ Skill(code-review)
+  ⎿  Running in the background
+
+⏺ Feature 03 is built and PR #11 is open against develop. The /code-review
+  (level medium, transcripts excluded) is still running in the background, and
+  I'll bring you the findings when it finishes. Lint, typecheck, the 73 unit
+  tests, the 8 e2e tests and the build all pass.
+
+  What's in PR #11 (8 commits on feature/heatmap-dashboard):
+  - Transcript: 02-scoring is committed. The gitleaks scan found nothing.
+  - API:
+    - GET /warehouse/layout returns every bin with its current score.
+    - GET /bins/:code returns the bin detail. Unknown codes return 404, and
+      codes are matched case-insensitively.
+    - GET /bins/:code/scores returns the last 20 scores by default; limit goes
+      from 1 to 100.
+  - Heatmap: one grid per rack, top shelf first, colored in your three bands
+    (gray for unscored bins), with a legend. The "Recompute scores" button
+    refreshes the page when it finishes.
+  - Bin drawer: opens at ?bin=<code>. It shows the score breakdown, the score
+    history, the last audit date (marked when a bin was never audited), and the
+    pallets. Lines at quantity 0 are hidden. It closes with ✕, a click outside
+    it, or Escape.
+  - Docs: decisions D-060 to D-065 record the plan and your five answers, the
+    README has a heatmap section and an endpoint table, and the Roadmap now
+    shows 03 Done and 04 Next.
+
+  Two changes from the approved plan (recorded as D-066):
+  - The recompute action refreshes the page with refresh() instead of
+    revalidatePath('/'), because Next 16's docs recommend it for this kind of
+    page.
+  - In the drawer's history, repeated recomputes that didn't change the score
+    now collapse into one line, like "Manual recompute ×20". Without this, the
+    seeded data showed 20 identical rows and hid the actual changes. Audit rows
+    are never merged, and the API still returns every row.
+
+  I checked the heatmap and drawer with headless Chrome screenshots, including a
+  never-audited bin and an unknown code. I haven't clicked the "Recompute
+  scores" button in the browser; it's worth one manual click at
+  http://localhost:3000.
+
+  When the review finishes, I'll show you any fixes before applying them.
+
+✻ Crunched for 7m 0s · done 1:48 AM
+
+⏺ Agent "/code-review medium — review branch feature/heatm…" finished · 47s
+⏺ The code review of PR #11 (level medium, transcripts excluded) came back with
+  no findings, so the PR can be merged.
+
+  The reviewer checked these spots and found no bugs:
+  - History limit: limit values 0, 101, abc and 5abc return a 400. A missing
+    limit falls back to 20.
+  - Bin codes: lookups are case-insensitive, and an unknown code shows the "no
+    bin" message in the drawer.
+  - Pallet lines: lines at quantity 0 are hidden.
+  - Breakdown: the stored factor breakdown is returned unchanged.
+  - Grid: an empty rack renders without errors, and bins show top shelf first.
+  - History grouping: audit rows are never merged, and the change arrows compare
+    against the right earlier score.
+  - Recompute: refresh() exists in this Next.js version, so the page reloads
+    after a recompute.
+
+  Next steps:
+  1. Merge PR #11 into develop. Should I merge it with gh pr merge 11 --merge,
+     or would you rather merge it on GitHub? Before merging, give "Recompute
+     scores" one manual click; it's the only thing I haven't clicked in a
+     browser.
+  2. Close the session. After the merge I'll show you a preview of what this
+     session covered and ask before you export. Then you run /export 
+     docs/transcripts/03-heatmap.txt and /clear.
+
+✻ Brewed for 7m 47s · done 1:48 AM
+
+❯ merge it                                                                      
+
+  Merged PR #11 (ctrl+o to expand)
+
+⏺ PR #11 is merged into develop (merge commit 416b57e), and my local develop is
+  up to date with no uncommitted changes. The Roadmap now shows 03 Done and 04
+  Next.
+
+  Session preview: 03-heatmap
+
+  Feature: heatmap dashboard and bin detail drawer (Roadmap row 03).
+
+  Decisions recorded:
+  - D-060: feature 03 plan approved
+  - D-061: color bands 0–39 green, 40–69 yellow, 70–100 red, gray when unscored
+  - D-062: bins are addressed by code in the API
+  - D-063: score history returns the last 20 rows by default
+  - D-064: the bin drawer is server-rendered from ?bin=
+  - D-065: the drawer hides pallet lines with quantity 0
+  - D-066: two changes made during implementation: refresh() instead of
+    revalidatePath, and the drawer history groups repeated recomputes into one
+    line
+
+  PR and commits: PR #11, feature/heatmap-dashboard → develop, merged.
+  1. docs(transcripts): add 02-scoring session transcript (gitleaks: exit 0, no
+     findings)
+  2. docs(repo): record the feature 03 plan
+  3. feat(shared): add heatmap and bin detail contract types
+  4. feat(api): add warehouse layout endpoint
+  5. feat(api): add bin detail and score history endpoints
+  6. feat(heatmap): add heatmap grid with recompute action
+  7. feat(heatmap): add bin detail drawer
+  8. docs(repo): document heatmap endpoints and update the roadmap
+
+  Code review: one /code-review at level medium with transcripts excluded, and
+  it found nothing.
+
+  Sensitive content check: nothing to flag. No .env contents, database URLs,
+  credentials or tokens were printed in this session. The command outputs were
+  API JSON, test summaries, git and gh output, and screenshots of the local app.
+
+  Shall I go ahead? If yes, run:
+
+  /export docs/transcripts/03-heatmap.txt
+
+  Then run /clear and start feature 04 (audit plans and tasks) in the new
+  session. The transcript will be scanned and committed as the first commit of
+  feature/audit-plans.
+
+✻ Churned for 23s · done 1:49 AM
