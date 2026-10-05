@@ -744,3 +744,17 @@ All decisions made during development, in chronological order.
 - **Decision:** A bin with no lines can be counted; it passes automatically with a
   discrepancy of 0, confirming the bin is empty.
 - **Alternatives considered:** Refusing the count.
+
+## D-077 — Implementation adjustments in feature 05
+- **Date:** 2026-10-05
+- **Area:** Count flow / Testing
+- **Decision:** Small changes to the approved plan (D-072), made during implementation:
+  - The count sheet also returns the bin's last audit date and current score, so the
+    count page can show them without a second request.
+  - The 409 for a stale sheet names the line by SKU and pallet ("SKU-1010 on
+    PLT-0072") instead of its internal id.
+  - E2e test files run one at a time (`fileParallelism: false`): they share the seeded
+    database, and the count tests create a pending task that would change the audit-plan
+    eligibility count checked by another file.
+  - The API commits are split by layer (pure rules, then endpoints) rather than "sheet,
+    then save".
